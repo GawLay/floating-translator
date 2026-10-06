@@ -5,15 +5,28 @@
 <h1 align="center">Floating Translator</h1>
 
 <p align="center">
-  A tiny floating Mac tool for text in apps that do not offer translation.<br>
-  Put the lens over a message, capture it, and read the meaning without switching to Google Translate.
+  A tiny floating Mac tool for text that is hard to select or translate.<br>
+  Put the lens over the words, capture them, and understand them without leaving your current app.
 </p>
 
 <p align="center">
   <strong>macOS 15+</strong> · <strong>Swift</strong> · <strong>No API key</strong> · <strong>MIT licensed</strong>
 </p>
 
-Floating Translator is especially handy for Zalo, images, and other places where text is hard to select. It starts with **Vietnamese → English** and also offers other languages supported by Apple's Translation framework. It lives in the Dock and has a **Vi·En** shortcut in the menu bar while running.
+Floating Translator starts with **Vietnamese → English** and also offers other languages supported by Apple's Translation framework. It lives in the Dock and has a **Vi·En** shortcut in the menu bar while running.
+
+## Why I made it
+
+I built this for my own everyday use. Sometimes I come across text inside an app or image that I cannot easily select, and switching to a translation website breaks my flow. I wanted a small window I could move over the words, read the translation, and then get back to what I was doing. I am sharing it in case it helps you too.
+
+## Features
+
+- A movable lens that stays above other apps.
+- Vietnamese → English by default, with more language choices.
+- One-click capture and an optional Auto Scan mode.
+- The original text and translation together, with a Copy button.
+- Paste text as a fallback when OCR cannot read the screen.
+- On-device translation through macOS, with no account or API key.
 
 ## How it works
 
@@ -41,7 +54,7 @@ If you want the app at login, add it through **System Settings → General → L
 
 | Access | Why | When |
 | --- | --- | --- |
-| Screen Recording | macOS requires this to read pixels in another app, including Zalo. | Your first Capture, or the first scan after you turn on Auto Scan. |
+| Screen Recording | macOS requires this to read pixels in another app. | Your first Capture, or the first scan after you turn on Auto Scan. |
 | Translation language download | Apple may need to install the chosen language models. | The first time you use a language pair. |
 
 macOS may word its Screen Recording prompt as **“screen and audio.”** Floating Translator sets audio capture off and does not request microphone, camera, Accessibility, or contacts access. It takes one display frame, crops it to the lens in memory, and discards the image after OCR. It does not save messages or screenshots. Translation runs through Apple's [on-device Translation framework](https://developer.apple.com/documentation/translation/translationsession).
