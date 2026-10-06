@@ -13,7 +13,7 @@
   <strong>macOS 15+</strong> · <strong>Swift</strong> · <strong>No API key</strong> · <strong>MIT licensed</strong>
 </p>
 
-Floating Translator starts with **Vietnamese → English**. You can also choose **Thai** or **Malay**, along with other languages supported by Apple's Translation framework. It lives in the Dock and has a **Translate** shortcut in the menu bar while running.
+Floating Translator starts with **Vietnamese → English**. You can also choose **Thai** or **Malay**, along with other languages supported by Apple's Translation framework. It lives in the Dock and has a compact **translation lens icon** in the menu bar while running.
 
 ## Why I made it
 
@@ -41,7 +41,7 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 2. In Finder, locate `Floating Translator.app`. After a source build, it is inside the repository's `build` folder.
 3. Drag the app into your Mac's **Applications** folder. If you are updating an existing installation, choose **Replace**.
 4. Open **Applications → Floating Translator**. Use this installed copy each time so your screen-access grant belongs to the app you actually run.
-5. The floating window opens, and **Translate** appears in the menu bar. Use **⌥⌘T** to show or hide the window.
+5. The floating window opens, and a **translation lens icon** appears in the menu bar. Click that icon or use **⌥⌘T** to show or hide the window.
 
 ### First launch: enable screen capture
 
@@ -76,9 +76,11 @@ Add **Floating Translator** through **System Settings → General → Login Item
 
 ## Shortcuts
 
+Click the **translation lens icon** in the top-right menu bar to show or hide the floating window. Hover over it to see **Floating Translator** and its keyboard shortcut. The compact icon fits beside your other menu bar apps and remembers its position between launches. To rearrange it, hold **⌘ Command** and drag it along the menu bar.
+
 | Shortcut | Action |
 | --- | --- |
-| Menu bar **Translate** button | Show or hide the floating window. |
+| Menu bar **translation lens icon** | Show or hide the floating window. |
 | ⌥⌘T | Show or hide the window from another app. |
 | ⌥⌘R | Capture the lens. If the window is hidden, show it first. |
 | ⌥⌘A | Switch between Manual and Auto Scan. |

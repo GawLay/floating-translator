@@ -334,12 +334,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             return
         }
         NSApp.setActivationPolicy(.regular)
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.autosaveName = "FloatingTranslator.MenuBar"
+        statusItem.isVisible = true
         let menuIcon = NSImage(systemSymbolName: "character.viewfinder", accessibilityDescription: "Floating Translator")
+        menuIcon?.size = NSSize(width: 18, height: 18)
         menuIcon?.isTemplate = true
         statusItem.button?.image = menuIcon
-        statusItem.button?.title = " Translate"
-        statusItem.button?.toolTip = "Show or hide Floating Translator"
+        statusItem.button?.title = menuIcon == nil ? "A" : ""
+        statusItem.button?.imagePosition = menuIcon == nil ? .noImage : .imageOnly
+        statusItem.button?.setAccessibilityLabel("Floating Translator")
+        statusItem.button?.toolTip = "Floating Translator — show or hide the lens (⌥⌘T)"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
 
