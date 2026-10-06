@@ -19,18 +19,21 @@ Floating Translator starts with **Vietnamese → English**. You can also choose 
 
 Requires **macOS 15 or later**. No account or API key is needed.
 
+**Currently available as source code on GitHub.** There is no prebuilt app download yet; you need to build it on your Mac before installing it.
+
 ### Install in Applications
 
-1. Get **Floating Translator.app**. If you downloaded the source code, follow [Build from source](#build-from-source) to create it.
-2. Drag the app into **Applications**, then open it from there.
-3. Click **Enable capture**. In **System Settings → Privacy & Security → Screen Recording**, enable **Floating Translator**. On some macOS versions, this setting is called **Screen & System Audio Recording**.
-4. Quit and reopen the app if macOS asks, then move the lens over text. **Auto** scans after you move or resize it; **Refresh** scans again without moving it.
+1. On this GitHub repository, click **Code → Download ZIP**, then extract the downloaded ZIP. You can also clone the repository with Git.
+2. Follow [Build from source](#build-from-source) below. This creates **Floating Translator.app** inside the extracted repository's `build` folder.
+3. Drag that app into **Applications**, then open it from there.
+4. Click **Enable capture**. In **System Settings → Privacy & Security → Screen Recording**, enable **Floating Translator**. On some macOS versions, this setting is called **Screen & System Audio Recording**.
+5. Quit and reopen the app if macOS asks, then move the lens over text. **Auto** scans after you move or resize it; **Refresh** scans again without moving it.
 
 Click the translation lens icon in the menu bar or press **⌥⌘T** to show or hide the window. Apple may ask to download translation languages on first use. **Paste text** works without screen access.
 
 ### Updating
 
-Quit the running app using **Quit**, replace the copy in **Applications**, and reopen it there. If access stops working, see [Permission troubleshooting](#permission-troubleshooting).
+Download or pull the latest source from GitHub and run `./build.sh` again. Quit the running app using **Quit**, replace the copy in **Applications** with the newly built app, and reopen it there. If access stops working, see [Permission troubleshooting](#permission-troubleshooting).
 
 To open the app at login, add it in **System Settings → General → Login Items**.
 
@@ -89,7 +92,7 @@ The three ⌥⌘ shortcuts are registered only while Floating Translator runs. T
    xcode-select --install
    ```
 
-2. Open Terminal in the repository folder and run:
+2. Open Terminal in the extracted or cloned repository folder and run:
 
    ```sh
    ./build.sh
