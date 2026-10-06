@@ -24,7 +24,7 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 - A movable, resizable lens that stays above other apps.
 - Vietnamese → English by default, with Thai, Malay, and more language choices.
 - Auto Scan by default, with a Manual Capture option, plus menu bar and keyboard shortcuts.
-- The original text and translation together, with a Copy button.
+- Complete original text and translation in scrollable panes, with text selection and a Copy button.
 - Paste text as a fallback when OCR cannot read the screen.
 - On-device translation through macOS, with no account or API key.
 
@@ -32,8 +32,8 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 
 1. Open Floating Translator. Its small window stays above other apps.
 2. Place the outlined lens over the text you want to understand. Drag a window edge or corner to resize the capture area.
-3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). The window briefly hides, reads the text beneath it, then shows both the original and translation.
-4. Use **Copy** to copy the result. If OCR misses something, copy the text yourself and use **Paste text**.
+3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). The lens stays visible while the app reads the text beneath it, then shows both the original and translation. ScreenCaptureKit excludes the translator window from the captured image.
+4. Scroll either result pane to read a longer capture. Use **Copy** to copy the result. If OCR misses something, copy the text yourself and use **Paste text**.
 
 **Auto** is selected each time the app starts. Choose **Manual** in the Scan Mode control when you want to capture only after clicking the button. Opening the app alone does not capture the screen; Auto scans after you move or resize the lens.
 

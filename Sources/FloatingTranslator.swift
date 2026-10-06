@@ -57,7 +57,6 @@ final class TranslatorModel: ObservableObject {
             return
         }
         sourceText = trimmed
-        translatedText = ""
         status = "Translating…"
         isWorking = true
         translationRequestID += 1
@@ -261,20 +260,34 @@ private struct LensView: View {
                     .font(.caption2.weight(.semibold))
                     .tracking(1.2)
                     .foregroundStyle(.secondary)
-                Text(model.sourceText.isEmpty ? "Text read from the lens will appear here." : model.sourceText)
-                    .font(.subheadline)
-                    .foregroundStyle(model.sourceText.isEmpty ? .secondary : .primary)
-                    .lineLimit(2)
+                ScrollView(.vertical) {
+                    Text(model.sourceText.isEmpty ? "Text read from the lens will appear here." : model.sourceText)
+                        .font(.subheadline)
+                        .foregroundStyle(model.sourceText.isEmpty ? .secondary : .primary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .frame(height: 64)
                 Divider()
-                Text("TRANSLATION")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(.secondary)
-                Text(model.translatedText.isEmpty ? "Your translation will appear here." : model.translatedText)
-                    .font(.body)
-                    .foregroundStyle(model.translatedText.isEmpty ? .secondary : .primary)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .topLeading)
+                HStack {
+                    Text("TRANSLATION")
+                        .font(.caption2.weight(.semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(.secondary)
+                    if model.isWorking {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                ScrollView(.vertical) {
+                    Text(model.translatedText.isEmpty ? "Your translation will appear here." : model.translatedText)
+                        .font(.body)
+                        .foregroundStyle(model.translatedText.isEmpty ? .secondary : .primary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .frame(height: 96)
                 HStack {
                     Text(model.status)
                         .font(.caption)
@@ -293,7 +306,7 @@ private struct LensView: View {
         }
         .padding(16)
         .frame(minWidth: 500, maxWidth: .infinity,
-               minHeight: 580, maxHeight: .infinity)
+               minHeight: 700, maxHeight: .infinity)
         .background(Color.clear)
         .preferredColorScheme(.light)
         .translationTask(model.configuration) { session in
@@ -330,7 +343,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
 
-        let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 500, height: 580),
+        let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 500, height: 700),
                              styleMask: [.titled, .closable, .resizable],
                              backing: .buffered, defer: false)
         window.title = "Floating Translator"
@@ -342,7 +355,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.minSize = NSSize(width: 500, height: 580)
+        window.contentMinSize = NSSize(width: 500, height: 700)
         window.maxSize = NSSize(width: 1000, height: 1000)
         window.contentView = NSHostingView(rootView: LensView(model: model))
         window.center()
@@ -518,19 +531,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         }
         model.isWorking = true
         model.status = "Reading text…"
-        panel.orderOut(nil)
         Task {
-            // Let WindowServer remove the lens before taking a one-frame screenshot.
-            try? await Task.sleep(nanoseconds: 180_000_000)
             do {
                 let image = try await Self.captureDisplay(displayID: displayNumber.uint32Value,
                                                           screen: screen, rect: screenRect)
                 autoCapturePaused = false
                 let text = try await Self.recognize(image, sourceCode: model.sourceCode)
-                panel.makeKeyAndOrderFront(nil)
                 model.translate(text)
             } catch {
-                panel.makeKeyAndOrderFront(nil)
                 model.isWorking = false
                 let captureError = error as NSError
                 if captureError.domain == SCStreamErrorDomain,
@@ -551,7 +559,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayNotFound
         }
-        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+        // WindowServer composites the text underneath us without hiding the lens
+        // or changing focus in the source app.
+        let ownApps = content.applications.filter {
+            $0.processID == ProcessInfo.processInfo.processIdentifier
+        }
+        let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
         let configuration = SCStreamConfiguration()
         configuration.width = Int(CGFloat(display.width) * screen.backingScaleFactor)
         configuration.height = Int(CGFloat(display.height) * screen.backingScaleFactor)
@@ -576,6 +589,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
+            request.minimumTextHeight = 0.005
             let codes: [String: String] = [
                 "vi": "vi-VT", "en": "en-US", "fr": "fr-FR", "de": "de-DE",
                 "es": "es-ES", "ja": "ja-JP", "ko": "ko-KR",
@@ -587,7 +601,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                 .filter { supported.contains($0) }
                 .uniqued()
             try VNImageRequestHandler(cgImage: image).perform([request])
-            return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            return (request.results ?? []).sorted {
+                $0.boundingBox.midY > $1.boundingBox.midY
+            }.compactMap { $0.topCandidates(1).first?.string }
                 .joined(separator: "\n")
         }.value
     }
