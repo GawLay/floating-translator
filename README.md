@@ -15,6 +15,14 @@
 
 Floating Translator starts with **Vietnamese → English**. You can also choose **Thai** or **Malay**, along with other languages supported by Apple's Translation framework. It lives in the Dock and has a compact **translation lens icon** in the menu bar while running.
 
+## Preview
+
+<p align="center">
+  <img src="Assets/preview.png" alt="Floating Translator's dark floating lens reading Vietnamese text and displaying its English translation" width="520">
+</p>
+
+Place the lens over text in another app and read the translation below. Refresh to scan the same area again.
+
 ## Why I made it
 
 I built this for my own everyday use. Sometimes I come across text inside an app or image that I cannot easily select, and switching to a translation website breaks my flow. I wanted a small window I could move over the words, read the translation, and then get back to what I was doing. I am sharing it in case it helps you too.
