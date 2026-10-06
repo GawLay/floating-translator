@@ -23,5 +23,5 @@ swiftc -parse-as-library -swift-version 5 -O \
   -o 'build/Floating Translator.app/Contents/MacOS/FloatingTranslator'
 cp Info.plist 'build/Floating Translator.app/Contents/Info.plist'
 cp Assets/AppIcon.icns 'build/Floating Translator.app/Contents/Resources/AppIcon.icns'
-codesign --force --sign - 'build/Floating Translator.app'
+codesign --force --sign "${CODESIGN_IDENTITY:--}" 'build/Floating Translator.app'
 echo "Built: $PWD/build/Floating Translator.app"

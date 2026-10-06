@@ -24,7 +24,8 @@ private let sourceLanguages: [LanguageChoice] = [
     .init(code: "ja", name: "Japanese"),
     .init(code: "ko", name: "Korean"),
     .init(code: "zh-Hans", name: "Chinese"),
-    .init(code: "th", name: "Thai")
+    .init(code: "th", name: "Thai"),
+    .init(code: "ms", name: "Malay")
 ]
 
 private let targetLanguages = sourceLanguages.filter { $0.code != "auto" }
@@ -38,7 +39,9 @@ final class TranslatorModel: ObservableObject {
     @Published var status = "Place the lens over text, then click Capture."
     @Published var isWorking = false
     @Published var autoScan = false
+    @Published var needsScreenAccess = false
     @Published var configuration: TranslationSession.Configuration?
+    private var translationRequestID = 0
 
     weak var lensView: NSView?
     var captureHandler: (() -> Void)?
@@ -46,6 +49,8 @@ final class TranslatorModel: ObservableObject {
     func translate(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            translationRequestID += 1
+            configuration = nil
             status = "No text found. Move the lens or use Paste text."
             isWorking = false
             return
@@ -54,14 +59,38 @@ final class TranslatorModel: ObservableObject {
         translatedText = ""
         status = "Translating…"
         isWorking = true
+        translationRequestID += 1
+        let requestID = translationRequestID
         let source = sourceLanguages.first { $0.code == sourceCode }?.language
         let target = targetLanguages.first { $0.code == targetCode }?.language
-        var next = TranslationSession.Configuration(source: source, target: target)
-        if let current = configuration, current.source == source, current.target == target {
-            next = current
-            next.invalidate()
+        let previousConfiguration = configuration
+        configuration = nil
+        if source == target, source != nil {
+            status = "Choose two different languages."
+            isWorking = false
+            return
         }
-        configuration = next
+        Task {
+            if let source, let target {
+                let availability = LanguageAvailability()
+                let support = await availability.status(from: source, to: target)
+                guard requestID == translationRequestID else { return }
+                if support == .unsupported {
+                    status = "This language pair is unavailable on this macOS version."
+                    isWorking = false
+                    return
+                }
+            }
+            guard requestID == translationRequestID else { return }
+            if var previousConfiguration,
+               previousConfiguration.source == source,
+               previousConfiguration.target == target {
+                previousConfiguration.invalidate()
+                configuration = previousConfiguration
+            } else {
+                configuration = TranslationSession.Configuration(source: source, target: target)
+            }
+        }
     }
 
     func retranslate() {
@@ -71,14 +100,15 @@ final class TranslatorModel: ObservableObject {
 
     func runTranslation(_ session: TranslationSession) async {
         let text = sourceText
+        let requestID = translationRequestID
         guard !text.isEmpty else { return }
         do {
             let response = try await session.translate(text)
-            guard text == sourceText else { return }
+            guard requestID == translationRequestID else { return }
             translatedText = response.targetText
             status = "Ready"
         } catch {
-            guard text == sourceText else { return }
+            guard requestID == translationRequestID else { return }
             status = "Translation unavailable: \(error.localizedDescription)"
         }
         isWorking = false
@@ -97,6 +127,11 @@ final class TranslatorModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(translatedText, forType: .string)
         status = "Translation copied."
+    }
+
+    func openScreenRecordingSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -235,9 +270,15 @@ private struct LensView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                     Spacer()
-                    Button("Paste text") { model.pasteText() }
-                    Button("Copy") { model.copyResult() }
-                        .disabled(model.translatedText.isEmpty)
+                    if model.needsScreenAccess {
+                        Button("Open Screen Recording Settings") {
+                            model.openScreenRecordingSettings()
+                        }
+                    } else {
+                        Button("Paste text") { model.pasteText() }
+                        Button("Copy") { model.copyResult() }
+                            .disabled(model.translatedText.isEmpty)
+                    }
                     Button("Quit") { NSApp.terminate(nil) }
                 }
                 .controlSize(.small)
@@ -272,7 +313,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         let menuIcon = NSImage(systemSymbolName: "character.viewfinder", accessibilityDescription: "Floating Translator")
         menuIcon?.isTemplate = true
         statusItem.button?.image = menuIcon
-        statusItem.button?.title = " Vi·En"
+        statusItem.button?.title = " Translate"
         statusItem.button?.toolTip = "Show or hide Floating Translator"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
@@ -400,6 +441,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private func capture() {
         pendingScan?.cancel()
         guard !model.isWorking, let lens = model.lensView, let window = lens.window else { return }
+        guard CGPreflightScreenCaptureAccess() else {
+            model.needsScreenAccess = true
+            model.status = "Screen Recording access is needed to capture text. Enable it in System Settings, then try again."
+            return
+        }
+        model.needsScreenAccess = false
         let localRect = lens.convert(lens.bounds, to: nil)
         let screenRect = window.convertToScreen(localRect)
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(screenRect.midpoint) }),
@@ -461,7 +508,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             let codes: [String: String] = [
                 "vi": "vi-VT", "en": "en-US", "fr": "fr-FR", "de": "de-DE",
                 "es": "es-ES", "ja": "ja-JP", "ko": "ko-KR",
-                "zh-Hans": "zh-Hans", "th": "th-TH"
+                "zh-Hans": "zh-Hans", "th": "th-TH", "ms": "ms-MY"
             ]
             let preferred = codes[sourceCode] ?? "vi-VT"
             let supported = try request.supportedRecognitionLanguages()
