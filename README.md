@@ -15,6 +15,25 @@
 
 Floating Translator starts with **Vietnamese → English**. You can also choose **Thai** or **Malay**, along with other languages supported by Apple's Translation framework. It lives in the Dock and has a compact **translation lens icon** in the menu bar while running.
 
+## Installation
+
+Requires **macOS 15 or later**. No account or API key is needed.
+
+### Install in Applications
+
+1. Get **Floating Translator.app**. If you downloaded the source code, follow [Build from source](#build-from-source) to create it.
+2. Drag the app into **Applications**, then open it from there.
+3. Click **Enable capture**. In **System Settings → Privacy & Security → Screen Recording**, enable **Floating Translator**. On some macOS versions, this setting is called **Screen & System Audio Recording**.
+4. Quit and reopen the app if macOS asks, then move the lens over text. **Auto** scans after you move or resize it; **Refresh** scans again without moving it.
+
+Click the translation lens icon in the menu bar or press **⌥⌘T** to show or hide the window. Apple may ask to download translation languages on first use. **Paste text** works without screen access.
+
+### Updating
+
+Quit the running app using **Quit**, replace the copy in **Applications**, and reopen it there. If access stops working, see [Permission troubleshooting](#permission-troubleshooting).
+
+To open the app at login, add it in **System Settings → General → Login Items**.
+
 ## Preview
 
 <p align="center">
@@ -37,43 +56,6 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 - Complete original text and translation in scrollable panes, with text selection and a Copy button.
 - Paste text as a fallback when OCR cannot read the screen.
 - On-device translation through macOS, with no account or API key.
-
-## Installation
-
-### Requirements
-
-- **macOS 15 or later.** Available translation languages depend on your macOS version.
-- A `Floating Translator.app` bundle. You can create one by following [Build from source](#build-from-source).
-
-### Install in Applications
-
-1. **Quit any running copy** using the app's **Quit** button. Closing the floating window can leave the app running in the menu bar.
-2. In Finder, locate `Floating Translator.app`. After a source build, it is inside the repository's `build` folder.
-3. Drag the app into your Mac's **Applications** folder. If you are updating an existing installation, choose **Replace**.
-4. Open **Applications → Floating Translator**. Use this installed copy each time so your screen-access grant belongs to the app you actually run.
-5. The floating window opens, and a **translation lens icon** appears in the menu bar. Click that icon or use **⌥⌘T** to show or hide the window.
-
-### First launch: enable screen capture
-
-1. Click **Enable capture** inside the lens.
-2. When macOS opens System Settings, go to **Privacy & Security → Screen Recording**. On some macOS versions, this is called **Screen & System Audio Recording**.
-3. Enable **Floating Translator**.
-4. If macOS asks you to quit and reopen the app, do so. Reopen it from **Applications**.
-5. Move the lens over the text you want to read. **Auto** is selected by default and scans after you move or resize the lens. Choose **Manual** if you prefer to click **Capture** yourself.
-
-Apple may ask to download language models the first time you translate a language pair. Allow that download to use on-device translation. **Paste text** also works without Screen Recording access.
-
-Opening the app or moving an unapproved lens does not open a permission dialog. Screen access is requested through **Enable capture**. The app captures no audio; see [Permissions and privacy](#permissions-and-privacy) for details.
-
-### Updating
-
-Quit the running app, build or obtain the new version, replace the bundle in **Applications**, and reopen it there. For local builds, keep `~/Library/Application Support/Floating Translator/Signing` so the same certificate is reused and your existing permission grant can carry over.
-
-Switching from an older ad hoc build or to a different signing certificate requires one fresh screen-access grant. If a Settings toggle is enabled but capture still reports missing access, quit all running copies, open the installed app from **Applications**, and use **Enable capture** for that copy.
-
-### Optional: open at login
-
-Add **Floating Translator** through **System Settings → General → Login Items**. The app does not add itself automatically.
 
 ## How it works
 
@@ -101,15 +83,28 @@ The three ⌥⌘ shortcuts are registered only while Floating Translator runs. T
 
 ## Build from source
 
-Install the Apple Command Line Tools if needed (`xcode-select --install`). Open Terminal in the repository directory, then run:
+1. Install Apple's Command Line Tools if they are not already installed:
 
-```sh
-./build.sh
-```
+   ```sh
+   xcode-select --install
+   ```
 
-The result is `build/Floating Translator.app`. Follow [Install in Applications](#install-in-applications) before the first launch and screen-access grant. The build uses only Apple's AppKit, SwiftUI, Vision, ScreenCaptureKit, and Translation frameworks. No package install, account, or API key is required.
+2. Open Terminal in the repository folder and run:
 
-Local builds reuse a persistent signing certificate. The first build creates a dedicated private keychain in `~/Library/Application Support/Floating Translator/Signing` and a user-level trust entry scoped to that certificate's code-signing use. Later builds reuse it, so macOS can recognize updates as the same app. The private key is never placed in this repository. Back up that signing directory if you want to preserve the identity when moving to another Mac.
+   ```sh
+   ./build.sh
+   ```
+
+3. Find **Floating Translator.app** in the `build` folder, then follow [Install in Applications](#install-in-applications). Install it before the first launch and screen-access grant.
+
+The build script handles local signing automatically. You do not need to create a certificate yourself or install third-party packages.
+
+<details>
+<summary>Developer notes: signing and public releases</summary>
+
+The app uses Apple's AppKit, SwiftUI, Vision, ScreenCaptureKit, Translation, and Carbon frameworks.
+
+Local builds reuse a persistent signing certificate. The first build creates a dedicated private keychain in `~/Library/Application Support/Floating Translator/Signing` and a user-level trust entry scoped to that certificate's code-signing use. Later builds reuse it so macOS can recognize updates as the same app. Keep this directory private, retain it across builds, and back it up. The private key is never placed in this repository.
 
 If you have an Apple Development or Developer ID signing identity, set `CODESIGN_IDENTITY` instead:
 
@@ -117,7 +112,9 @@ If you have an Apple Development or Developer ID signing identity, set `CODESIGN
 CODESIGN_IDENTITY='your signing identity' ./build.sh
 ```
 
-The local certificate is for development on your own Mac. Public binary releases should use Developer ID signing and notarization.
+The local certificate is for development on your own Mac. Public binary releases should use Developer ID signing and notarization. Changing the signing certificate can require a fresh permission grant.
+
+</details>
 
 ## Permissions and privacy
 
@@ -130,15 +127,40 @@ Opening the app and moving the lens do not request permission. The app first per
 
 macOS may describe Screen Recording as **“screen and audio.”** Floating Translator sets audio capture off and does not request microphone, camera, Accessibility, or contacts access. It takes one display frame, crops it to the lens in memory, and discards the image after OCR. It does not save messages or screenshots. Translation runs through Apple's [on-device Translation framework](https://developer.apple.com/documentation/translation/translationsession).
 
-If you previously used an ad hoc signed version, switching to the persistent certificate requires one fresh grant. An old Settings toggle can refer to the earlier identity. Keep using the same signing certificate and the installed copy in Applications so subsequent local updates satisfy the same [macOS code identity](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+## Permission troubleshooting
 
-For a passive diagnostic without capturing or showing a window:
+### Why did the permission dialog keep appearing?
+
+During early development, local builds used **ad hoc signing**. Each rebuild changed the app's code identity, so macOS could stop associating it with the permission you had already granted. The Settings toggle could still show the old build as enabled. Repeated capture attempts then brought the dialog back. Apple explains this behavior in its [code identity documentation](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+The current build reuses a persistent certificate. The app also checks access before capturing, requests permission only through **Enable capture**, and pauses Auto when access is missing or declined. Switching from an old build to the new signing identity may require one fresh grant; ordinary updates using the same identity should retain it.
+
+### Screen Recording is enabled, but capture is blocked
+
+1. Quit all running copies using the app's **Quit** button. Closing the window can leave the menu bar app running.
+2. Open the copy in **Applications**, then click **Enable capture** and check its Screen Recording setting. If the app is missing from the list, use **+** to add the installed copy. See [Apple's screen access guide](https://support.apple.com/guide/mac-help/control-access-to-screen-and-system-audio-recording-mchld6aa7d23/mac).
+3. Quit and reopen the installed copy after changing access. For local builds, keep the signing directory above and use the same signing certificate for updates.
+
+<details>
+<summary>Advanced: clear an old grant or check access without capturing</summary>
+
+If an old, mismatched grant remains stuck, quit the app and reset **only Floating Translator's** Screen Recording grant:
+
+```sh
+tccutil reset ScreenCapture dev.phyo.floatingtranslator
+```
+
+This removes its current grant. Reopen the installed app, click **Enable capture**, and approve it again. This is a recovery step, not part of routine installation or updates.
+
+For a passive diagnostic without capturing or showing a window, quit the app first, then run:
 
 ```sh
 open -a 'Floating Translator' --args --diagnose-screen-access
 ```
 
-Quit the app first. The result is written to `~/Library/Application Support/Floating Translator/capture-status.json`; it contains only the app path, version, and whether macOS grants screen access.
+The result is written to `~/Library/Application Support/Floating Translator/capture-status.json`; it contains only the app path, version, and whether macOS grants screen access.
+
+</details>
 
 ## Notes
 
