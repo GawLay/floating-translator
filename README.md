@@ -22,7 +22,7 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 ## Features
 
 - A movable, resizable lens that stays above other apps.
-- A monochrome interface and app icon.
+- A dark monochrome interface with black panels, white text, and a matching dark app icon.
 - Vietnamese → English by default, with Thai, Malay, and more language choices.
 - Auto Scan by default, with a Manual Capture option, plus menu bar and keyboard shortcuts.
 - A **Refresh** button to read and translate the lens again without moving it.

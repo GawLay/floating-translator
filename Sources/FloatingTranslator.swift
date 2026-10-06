@@ -162,13 +162,13 @@ private struct MonochromeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.medium))
-            .foregroundStyle(prominent ? Color.white : Color.black)
+            .foregroundStyle(prominent ? Color.black : Color.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(prominent ? Color.black : Color.white, in: RoundedRectangle(cornerRadius: 7))
+            .background(prominent ? Color.white : Color(white: 0.12), in: RoundedRectangle(cornerRadius: 7))
             .overlay {
                 RoundedRectangle(cornerRadius: 7)
-                    .strokeBorder(Color.black.opacity(0.18), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
             }
             .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.4)
     }
@@ -182,7 +182,7 @@ private struct LensView: View {
             HStack(spacing: 10) {
                 Image(systemName: "text.viewfinder")
                     .font(.title2)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Translate anywhere")
                         .font(.headline)
@@ -205,7 +205,7 @@ private struct LensView: View {
                     .help("Capture the lens (Return or ⌥⌘R)")
             }
             .padding(12)
-            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(.black, in: RoundedRectangle(cornerRadius: 10))
 
             HStack {
                 Picker("From", selection: $model.sourceCode) {
@@ -221,7 +221,7 @@ private struct LensView: View {
             }
             .labelsHidden()
             .padding(7)
-            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(.black, in: RoundedRectangle(cornerRadius: 10))
 
             HStack {
                 Text("SCAN MODE")
@@ -240,8 +240,8 @@ private struct LensView: View {
                                 .font(.callout.weight(.medium))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
-                                .foregroundStyle(model.autoScan == enabled ? Color.white : Color.black)
-                                .background(model.autoScan == enabled ? Color.black : Color.white,
+                                .foregroundStyle(Color.white.opacity(model.autoScan == enabled ? 1 : 0.65))
+                                .background(Color.white.opacity(model.autoScan == enabled ? 0.18 : 0),
                                             in: RoundedRectangle(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)
@@ -252,7 +252,7 @@ private struct LensView: View {
                 .frame(width: 180)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.black.opacity(0.18), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
                 }
                 .accessibilityLabel("Scan mode")
                 Spacer()
@@ -262,7 +262,7 @@ private struct LensView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(.black, in: RoundedRectangle(cornerRadius: 10))
 
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
@@ -283,9 +283,9 @@ private struct LensView: View {
                             .controlSize(.small)
                     }
                 }
-                .foregroundStyle(.black)
+                .foregroundStyle(.white)
                 .padding(8)
-                .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                .background(.black, in: RoundedRectangle(cornerRadius: 8))
             }
             .frame(maxWidth: .infinity, minHeight: 128, maxHeight: .infinity)
             .background(LensAnchor(model: model))
@@ -294,7 +294,7 @@ private struct LensView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(7)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 7))
+                    .background(.black, in: RoundedRectangle(cornerRadius: 7))
                     .padding(8)
                     .allowsHitTesting(false)
             }
@@ -346,16 +346,17 @@ private struct LensView: View {
                 .controlSize(.small)
             }
             .padding(14)
-            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(.black, in: RoundedRectangle(cornerRadius: 10))
         }
         .padding(16)
         .frame(minWidth: 500, maxWidth: .infinity,
                minHeight: 700, maxHeight: .infinity)
         .background(Color.clear)
         .buttonStyle(MonochromeButtonStyle())
-        .tint(.black)
-        .accentColor(.black)
-        .preferredColorScheme(.light)
+        .foregroundStyle(.white)
+        .tint(.white)
+        .accentColor(.white)
+        .preferredColorScheme(.dark)
         .translationTask(model.configuration) { session in
             await model.runTranslation(session)
         }
@@ -406,6 +407,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window.isMovableByWindowBackground = true
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.appearance = NSAppearance(named: .darkAqua)
         window.hasShadow = false
         window.contentMinSize = NSSize(width: 500, height: 700)
         window.maxSize = NSSize(width: 1000, height: 1000)
