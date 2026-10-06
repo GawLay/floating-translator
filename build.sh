@@ -15,7 +15,7 @@ swiftc -parse-as-library -swift-version 5 -O \
   -sdk "$sdk_path" \
   -module-cache-path .build/clang-cache \
   -framework AppKit -framework SwiftUI -framework Vision \
-  -framework ScreenCaptureKit -framework Translation \
+  -framework ScreenCaptureKit -framework Translation -framework Carbon \
   Sources/FloatingTranslator.swift \
   -o 'build/Floating Translator.app/Contents/MacOS/FloatingTranslator'
 cp Info.plist 'build/Floating Translator.app/Contents/Info.plist'

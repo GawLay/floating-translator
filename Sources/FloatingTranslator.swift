@@ -3,6 +3,7 @@ import SwiftUI
 import Vision
 import ScreenCaptureKit
 import Translation
+import Carbon
 
 private struct LanguageChoice: Identifiable, Hashable {
     let code: String
@@ -141,6 +142,7 @@ private struct LensView: View {
                     .disabled(model.isWorking)
                     .buttonStyle(.borderedProminent)
                     .tint(Color(red: 0.77, green: 0.29, blue: 0.20))
+                    .help("Capture the lens (Return or ⌥⌘R)")
             }
             .padding(12)
             .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
@@ -162,16 +164,23 @@ private struct LensView: View {
             .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
 
             HStack {
-                Toggle("Auto scan after moving", isOn: $model.autoScan)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
+                Text("SCAN MODE")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(.secondary)
+                Picker("Scan mode", selection: $model.autoScan) {
+                    Text("Manual").tag(false)
+                    Text("Auto").tag(true)
+                }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
                     .onChange(of: model.autoScan) { _, enabled in
                         model.status = enabled
                             ? "Auto scan is on. Move the lens over text."
-                            : "Auto scan is off. Click Capture when ready."
+                            : "Manual mode. Click Capture when ready."
                     }
                 Spacer()
-                Text("Off by default")
+                Text("⌥⌘A to switch")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -189,8 +198,17 @@ private struct LensView: View {
                 .padding(8)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
             }
-            .frame(height: 128)
+            .frame(maxWidth: .infinity, minHeight: 128, maxHeight: .infinity)
             .background(LensAnchor(model: model))
+            .overlay(alignment: .bottomTrailing) {
+                Label("Resize window for a larger lens", systemImage: "arrow.up.left.and.arrow.down.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(7)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+                    .padding(8)
+                    .allowsHitTesting(false)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("ORIGINAL")
@@ -228,7 +246,8 @@ private struct LensView: View {
             .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
         }
         .padding(16)
-        .frame(width: 470, height: 470)
+        .frame(minWidth: 470, maxWidth: .infinity,
+               minHeight: 470, maxHeight: .infinity)
         .background(Color.clear)
         .preferredColorScheme(.light)
         .translationTask(model.configuration) { session in
@@ -244,6 +263,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private var panel: NSPanel!
     private var pendingScan: Task<Void, Never>?
     private var autoScanEnabledAt = Date.distantFuture
+    private var hotKeyHandler: EventHandlerRef?
+    private var hotKeys: [EventHotKeyRef] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -257,7 +278,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         statusItem.button?.action = #selector(togglePanel)
 
         let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 470, height: 470),
-                             styleMask: [.titled, .closable],
+                             styleMask: [.titled, .closable, .resizable],
                              backing: .buffered, defer: false)
         window.title = "Floating Translator"
         window.isFloatingPanel = true
@@ -268,12 +289,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
+        window.minSize = NSSize(width: 470, height: 470)
+        window.maxSize = NSSize(width: 900, height: 900)
         window.contentView = NSHostingView(rootView: LensView(model: model))
         window.center()
         window.delegate = self
         panel = window
         model.captureHandler = { [weak self] in self?.capture() }
+        installHotKeys()
         showPanel()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hotKeys.forEach { UnregisterEventHotKey($0) }
+        if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -291,6 +320,69 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled else { return }
             self?.capture()
+        }
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard model.autoScan else { return }
+        pendingScan?.cancel()
+        pendingScan = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            guard !Task.isCancelled else { return }
+            self?.capture()
+        }
+    }
+
+    private func installHotKeys() {
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                                      eventKind: UInt32(kEventHotKeyPressed))
+        let callback: EventHandlerUPP = { _, event, userData in
+            guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+            var identifier = EventHotKeyID()
+            let result = GetEventParameter(event, EventParamName(kEventParamDirectObject),
+                                           EventParamType(typeEventHotKeyID), nil,
+                                           MemoryLayout<EventHotKeyID>.size, nil,
+                                           &identifier)
+            guard result == noErr else { return result }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            let keyID = identifier.id
+            Task { @MainActor in delegate.handleHotKey(keyID) }
+            return noErr
+        }
+        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), callback, 1,
+                                                &eventType,
+                                                Unmanaged.passUnretained(self).toOpaque(),
+                                                &hotKeyHandler)
+        guard handlerStatus == noErr else { return }
+
+        let modifiers = UInt32(cmdKey | optionKey)
+        let shortcuts: [(UInt32, UInt32)] = [
+            (1, UInt32(kVK_ANSI_T)), // ⌥⌘T: show or hide
+            (2, UInt32(kVK_ANSI_R)), // ⌥⌘R: capture
+            (3, UInt32(kVK_ANSI_A))  // ⌥⌘A: Auto Scan on or off
+        ]
+        for (id, keyCode) in shortcuts {
+            var reference: EventHotKeyRef?
+            let identifier = EventHotKeyID(signature: 0x46544C4E, id: id)
+            let result = RegisterEventHotKey(keyCode, modifiers, identifier,
+                                             GetApplicationEventTarget(), 0, &reference)
+            if result == noErr, let reference { hotKeys.append(reference) }
+        }
+        if hotKeys.count != shortcuts.count {
+            model.status = "Some shortcuts are already used by another app. The menu bar button still works."
+        }
+    }
+
+    private func handleHotKey(_ id: UInt32) {
+        switch id {
+        case 1: togglePanel()
+        case 2:
+            if panel.isVisible { capture() }
+            else { showPanel() }
+        case 3:
+            model.autoScan.toggle()
+            showPanel()
+        default: break
         }
     }
 
