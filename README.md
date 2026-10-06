@@ -23,7 +23,7 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 
 - A movable, resizable lens that stays above other apps.
 - Vietnamese → English by default, with Thai, Malay, and more language choices.
-- Manual Capture and optional Auto Scan modes, plus menu bar and keyboard shortcuts.
+- Auto Scan by default, with a Manual Capture option, plus menu bar and keyboard shortcuts.
 - The original text and translation together, with a Copy button.
 - Paste text as a fallback when OCR cannot read the screen.
 - On-device translation through macOS, with no account or API key.
@@ -32,10 +32,10 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 
 1. Open Floating Translator. Its small window stays above other apps.
 2. Place the outlined lens over the text you want to understand. Drag a window edge or corner to resize the capture area.
-3. In **Manual** mode, click **Capture** (or press Return). The window briefly hides, reads the text beneath it, then shows both the original and translation.
+3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). The window briefly hides, reads the text beneath it, then shows both the original and translation.
 4. Use **Copy** to copy the result. If OCR misses something, copy the text yourself and use **Paste text**.
 
-Choose **Auto** in the Scan Mode control to scan after moving or resizing the window. **Manual** is selected each time the app starts, so moving the window alone does not request screen access or take screenshots.
+**Auto** is selected each time the app starts. Choose **Manual** in the Scan Mode control when you want to capture only after clicking the button. Opening the app alone does not capture the screen; Auto scans after you move or resize the lens.
 
 ## Shortcuts
 
@@ -75,7 +75,7 @@ If you want the app at login, add it through **System Settings → General → L
 | Screen Recording | macOS requires this to read pixels in another app. | Only when you use Capture or choose Auto and move or resize the lens. |
 | Translation language download | Apple may need to install the chosen language models. | The first time you use a language pair. |
 
-The app does not request access when it opens. On capture, it checks whether Screen Recording is already granted. If access is missing, it shows an **Open Screen Recording Settings** button rather than repeating the system prompt. After granting access, return to the app and capture again; macOS may require you to restart the app first.
+The app does not request access when it opens. Capture uses ScreenCaptureKit; macOS may prompt if this installed build has not been granted access. If capture fails because access is missing, the app shows an **Open Screen Recording Settings** button and pauses further automatic attempts. After granting access, return to the app and capture again; macOS may require you to restart the app first.
 
 macOS may describe Screen Recording as **“screen and audio.”** Floating Translator sets audio capture off and does not request microphone, camera, Accessibility, or contacts access. It takes one display frame, crops it to the lens in memory, and discards the image after OCR. It does not save messages or screenshots. Translation runs through Apple's [on-device Translation framework](https://developer.apple.com/documentation/translation/translationsession).
 

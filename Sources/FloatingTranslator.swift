@@ -36,9 +36,9 @@ final class TranslatorModel: ObservableObject {
     @Published var targetCode = "en"
     @Published var sourceText = ""
     @Published var translatedText = ""
-    @Published var status = "Place the lens over text, then click Capture."
+    @Published var status = "Move the lens over text to scan, or click Capture."
     @Published var isWorking = false
-    @Published var autoScan = false
+    @Published var autoScan = true
     @Published var needsScreenAccess = false
     @Published var configuration: TranslationSession.Configuration?
     private var translationRequestID = 0
@@ -208,6 +208,7 @@ private struct LensView: View {
                     Text("Auto").tag(true)
                 }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                     .frame(width: 180)
                     .onChange(of: model.autoScan) { _, enabled in
                         model.status = enabled
@@ -219,7 +220,9 @@ private struct LensView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
 
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
@@ -287,8 +290,8 @@ private struct LensView: View {
             .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
         }
         .padding(16)
-        .frame(minWidth: 470, maxWidth: .infinity,
-               minHeight: 470, maxHeight: .infinity)
+        .frame(minWidth: 500, maxWidth: .infinity,
+               minHeight: 580, maxHeight: .infinity)
         .background(Color.clear)
         .preferredColorScheme(.light)
         .translationTask(model.configuration) { session in
@@ -318,7 +321,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
 
-        let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 470, height: 470),
+        let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 500, height: 580),
                              styleMask: [.titled, .closable, .resizable],
                              backing: .buffered, defer: false)
         window.title = "Floating Translator"
@@ -330,8 +333,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.minSize = NSSize(width: 470, height: 470)
-        window.maxSize = NSSize(width: 900, height: 900)
+        window.minSize = NSSize(width: 500, height: 580)
+        window.maxSize = NSSize(width: 1000, height: 1000)
         window.contentView = NSHostingView(rootView: LensView(model: model))
         window.center()
         window.delegate = self
@@ -360,7 +363,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         pendingScan = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled else { return }
-            self?.capture()
+            self?.capture(automatic: true)
         }
     }
 
@@ -370,7 +373,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         pendingScan = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled else { return }
-            self?.capture()
+            self?.capture(automatic: true)
         }
     }
 
@@ -438,14 +441,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func capture() {
+    private func capture(automatic: Bool = false) {
         pendingScan?.cancel()
+        guard !automatic || !model.needsScreenAccess else { return }
         guard !model.isWorking, let lens = model.lensView, let window = lens.window else { return }
-        guard CGPreflightScreenCaptureAccess() else {
-            model.needsScreenAccess = true
-            model.status = "Screen Recording access is needed to capture text. Enable it in System Settings, then try again."
-            return
-        }
         model.needsScreenAccess = false
         let localRect = lens.convert(lens.bounds, to: nil)
         let screenRect = window.convertToScreen(localRect)
@@ -469,7 +468,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             } catch {
                 panel.makeKeyAndOrderFront(nil)
                 model.isWorking = false
-                model.status = "Capture needs Screen Recording permission in System Settings → Privacy & Security. \(error.localizedDescription)"
+                if CGPreflightScreenCaptureAccess() {
+                    model.status = "Capture failed: \(error.localizedDescription)"
+                } else {
+                    model.needsScreenAccess = true
+                    model.status = "Screen Recording access is needed. Enable it in System Settings, then try again."
+                }
             }
         }
     }
