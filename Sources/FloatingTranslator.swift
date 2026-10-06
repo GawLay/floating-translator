@@ -155,15 +155,34 @@ private struct LensAnchor: NSViewRepresentable {
     }
 }
 
+private struct MonochromeButtonStyle: ButtonStyle {
+    var prominent = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.medium))
+            .foregroundStyle(prominent ? Color.white : Color.black)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(prominent ? Color.black : Color.white, in: RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(Color.black.opacity(0.18), lineWidth: 1)
+            }
+            .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.4)
+    }
+}
+
 private struct LensView: View {
     @ObservedObject var model: TranslatorModel
 
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "character.viewfinder")
+                Image(systemName: "text.viewfinder")
                     .font(.title2)
-                    .foregroundStyle(Color(red: 0.78, green: 0.30, blue: 0.20))
+                    .foregroundStyle(.black)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Translate anywhere")
                         .font(.headline)
@@ -172,15 +191,21 @@ private struct LensView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button {
+                    model.captureHandler?()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(model.isWorking)
+                .help("Read the lens again and translate fresh text (⌥⌘R)")
                 Button("Capture") { model.captureHandler?() }
                     .keyboardShortcut(.return, modifiers: [])
                     .disabled(model.isWorking)
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color(red: 0.77, green: 0.29, blue: 0.20))
+                    .buttonStyle(MonochromeButtonStyle(prominent: true))
                     .help("Capture the lens (Return or ⌥⌘R)")
             }
             .padding(12)
-            .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
+            .background(.white, in: RoundedRectangle(cornerRadius: 10))
 
             HStack {
                 Picker("From", selection: $model.sourceCode) {
@@ -196,25 +221,40 @@ private struct LensView: View {
             }
             .labelsHidden()
             .padding(7)
-            .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
+            .background(.white, in: RoundedRectangle(cornerRadius: 10))
 
             HStack {
                 Text("SCAN MODE")
                     .font(.caption2.weight(.semibold))
                     .tracking(1.1)
                     .foregroundStyle(.secondary)
-                Picker("Scan mode", selection: $model.autoScan) {
-                    Text("Manual").tag(false)
-                    Text("Auto").tag(true)
-                }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 180)
-                    .onChange(of: model.autoScan) { _, enabled in
-                        model.status = enabled
-                            ? "Auto scan is on. Move the lens over text."
-                            : "Manual mode. Click Capture when ready."
+                HStack(spacing: 2) {
+                    ForEach([false, true], id: \.self) { enabled in
+                        Button {
+                            model.autoScan = enabled
+                            model.status = enabled
+                                ? "Auto scan is on. Move the lens over text."
+                                : "Manual mode. Click Capture when ready."
+                        } label: {
+                            Text(enabled ? "Auto" : "Manual")
+                                .font(.callout.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .foregroundStyle(model.autoScan == enabled ? Color.white : Color.black)
+                                .background(model.autoScan == enabled ? Color.black : Color.white,
+                                            in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(model.autoScan == enabled ? .isSelected : [])
                     }
+                }
+                .padding(2)
+                .frame(width: 180)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.black.opacity(0.18), lineWidth: 1)
+                }
+                .accessibilityLabel("Scan mode")
                 Spacer()
                 Text("⌥⌘A to switch")
                     .font(.caption2)
@@ -222,11 +262,15 @@ private struct LensView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
+            .background(.white, in: RoundedRectangle(cornerRadius: 10))
 
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(.orange.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+                    .strokeBorder(.white, style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(.black, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+                    }
                 VStack(spacing: 5) {
                     Image(systemName: "text.viewfinder")
                     Text(model.needsScreenAccess
@@ -235,13 +279,13 @@ private struct LensView: View {
                         .font(.caption)
                     if model.needsScreenAccess {
                         Button("Enable capture") { model.screenAccessHandler?() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(MonochromeButtonStyle(prominent: true))
                             .controlSize(.small)
                     }
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(.black)
                 .padding(8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .background(.white, in: RoundedRectangle(cornerRadius: 8))
             }
             .frame(maxWidth: .infinity, minHeight: 128, maxHeight: .infinity)
             .background(LensAnchor(model: model))
@@ -250,7 +294,7 @@ private struct LensView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(7)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+                    .background(.white, in: RoundedRectangle(cornerRadius: 7))
                     .padding(8)
                     .allowsHitTesting(false)
             }
@@ -302,12 +346,15 @@ private struct LensView: View {
                 .controlSize(.small)
             }
             .padding(14)
-            .background(Color(red: 0.98, green: 0.97, blue: 0.94), in: RoundedRectangle(cornerRadius: 10))
+            .background(.white, in: RoundedRectangle(cornerRadius: 10))
         }
         .padding(16)
         .frame(minWidth: 500, maxWidth: .infinity,
                minHeight: 700, maxHeight: .infinity)
         .background(Color.clear)
+        .buttonStyle(MonochromeButtonStyle())
+        .tint(.black)
+        .accentColor(.black)
         .preferredColorScheme(.light)
         .translationTask(model.configuration) { session in
             await model.runTranslation(session)
@@ -337,7 +384,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.autosaveName = "FloatingTranslator.MenuBar"
         statusItem.isVisible = true
-        let menuIcon = NSImage(systemSymbolName: "character.viewfinder", accessibilityDescription: "Floating Translator")
+        let menuIcon = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: "Floating Translator")
         menuIcon?.size = NSSize(width: 18, height: 18)
         menuIcon?.isTemplate = true
         statusItem.button?.image = menuIcon
@@ -499,6 +546,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             else { showPanel() }
         case 3:
             model.autoScan.toggle()
+            model.status = model.autoScan
+                ? "Auto scan is on. Move the lens over text."
+                : "Manual mode. Click Capture when ready."
             showPanel()
         default: break
         }

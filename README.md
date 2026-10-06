@@ -22,8 +22,10 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 ## Features
 
 - A movable, resizable lens that stays above other apps.
+- A monochrome interface and app icon.
 - Vietnamese → English by default, with Thai, Malay, and more language choices.
 - Auto Scan by default, with a Manual Capture option, plus menu bar and keyboard shortcuts.
+- A **Refresh** button to read and translate the lens again without moving it.
 - Complete original text and translation in scrollable panes, with text selection and a Copy button.
 - Paste text as a fallback when OCR cannot read the screen.
 - On-device translation through macOS, with no account or API key.
@@ -69,7 +71,7 @@ Add **Floating Translator** through **System Settings → General → Login Item
 
 1. Open Floating Translator. Its small window stays above other apps.
 2. Place the outlined lens over the text you want to understand. Drag a window edge or corner to resize the capture area.
-3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). The lens stays visible while the app reads the text beneath it, then shows both the original and translation. ScreenCaptureKit excludes the translator window from the captured image.
+3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). Click **Refresh** whenever you want to read the area again—for example, after new text appears beneath a stationary lens. Both buttons run a fresh capture, text recognition, and translation. The lens stays visible while the app reads the text beneath it, then shows both the original and translation. ScreenCaptureKit excludes the translator window from the captured image.
 4. Scroll either result pane to read a longer capture. Use **Copy** to copy the result. If OCR misses something, copy the text yourself and use **Paste text**.
 
 **Auto** is selected each time the app starts. Choose **Manual** in the Scan Mode control when you want to capture only after clicking the button. Opening the app alone does not capture the screen; Auto scans after you move or resize the lens.
@@ -83,6 +85,7 @@ Click the **translation lens icon** in the top-right menu bar to show or hide th
 | Menu bar **translation lens icon** | Show or hide the floating window. |
 | ⌥⌘T | Show or hide the window from another app. |
 | ⌥⌘R | Capture the lens. If the window is hidden, show it first. |
+| **Refresh** button | Read and translate the current lens area again. |
 | ⌥⌘A | Switch between Manual and Auto Scan. |
 | Return | Capture while the translator window is focused. |
 
