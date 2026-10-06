@@ -2,6 +2,9 @@
 set -euo pipefail
 
 cd "${0:A:h}"
+# Clang's compiled modules embed their cache path, so discard the generated
+# cache when the repository has been moved or copied.
+rm -rf .build/clang-cache
 mkdir -p .build/clang-cache build/'Floating Translator.app'/Contents/MacOS \
   build/'Floating Translator.app'/Contents/Resources
 
