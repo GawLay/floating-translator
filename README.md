@@ -60,11 +60,15 @@ open 'build/Floating Translator.app'
 
 The result is `build/Floating Translator.app`. You can drag that app into Applications. The build uses only Apple's AppKit, SwiftUI, Vision, ScreenCaptureKit, and Translation frameworks. No package install, account, or API key is required.
 
-Local builds use an ad hoc signature by default. If you have an Apple Development or Developer ID signing identity, set `CODESIGN_IDENTITY` when building so updates keep a stable identity:
+Local builds reuse a persistent signing certificate. The first build creates a dedicated private keychain in `~/Library/Application Support/Floating Translator/Signing` and a user-level trust entry scoped to that certificate's code-signing use. Later builds reuse it, so macOS can recognize updates as the same app. The private key is never placed in this repository. Back up that signing directory if you want to preserve the identity when moving to another Mac.
+
+If you have an Apple Development or Developer ID signing identity, set `CODESIGN_IDENTITY` instead:
 
 ```sh
 CODESIGN_IDENTITY='your signing identity' ./build.sh
 ```
+
+The local certificate is for development on your own Mac. Public binary releases should use Developer ID signing and notarization.
 
 If you want the app at login, add it through **System Settings → General → Login Items**. The app does not add itself automatically.
 
@@ -72,14 +76,22 @@ If you want the app at login, add it through **System Settings → General → L
 
 | Access | Why | When |
 | --- | --- | --- |
-| Screen Recording | macOS requires this to read pixels in another app. | Only when you use Capture or choose Auto and move or resize the lens. |
+| Screen Recording | macOS requires this to read pixels in another app. | Requested only when you click **Enable capture**. |
 | Translation language download | Apple may need to install the chosen language models. | The first time you use a language pair. |
 
-The app does not request access when it opens. Capture uses ScreenCaptureKit; macOS may prompt if this installed build has not been granted access. If capture fails because access is missing, the app shows an **Open Screen Recording Settings** button and pauses further automatic attempts. After granting access, return to the app and capture again; macOS may require you to restart the app first.
+Opening the app and moving the lens do not request permission. The app first performs a passive access check. If permission is missing, Auto waits and the lens shows **Enable capture**. Click that button to authorize the app in System Settings. macOS may require you to quit and reopen after granting access. Once granted, moving or resizing the lens scans automatically. Paste text remains available even without screen access.
 
 macOS may describe Screen Recording as **“screen and audio.”** Floating Translator sets audio capture off and does not request microphone, camera, Accessibility, or contacts access. It takes one display frame, crops it to the lens in memory, and discards the image after OCR. It does not save messages or screenshots. Translation runs through Apple's [on-device Translation framework](https://developer.apple.com/documentation/translation/translationsession).
 
-After rebuilding, macOS may no longer recognize an earlier Screen Recording grant because the default ad hoc signature changes. In that case, the app shows the Settings button when you capture. A stable signing identity avoids changing the app's identity on each build; public release builds can use Developer ID signing and notarization.
+If you previously used an ad hoc signed version, switching to the persistent certificate requires one fresh grant. An old Settings toggle can refer to the earlier identity. Keep using the same signing certificate and the installed copy in Applications so subsequent local updates satisfy the same [macOS code identity](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+For a passive diagnostic without capturing or showing a window:
+
+```sh
+open -a 'Floating Translator' --args --diagnose-screen-access
+```
+
+Quit the app first. The result is written to `~/Library/Application Support/Floating Translator/capture-status.json`; it contains only the app path, version, and whether macOS grants screen access.
 
 ## Notes
 

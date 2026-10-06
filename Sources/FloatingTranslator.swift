@@ -45,6 +45,7 @@ final class TranslatorModel: ObservableObject {
 
     weak var lensView: NSView?
     var captureHandler: (() -> Void)?
+    var screenAccessHandler: (() -> Void)?
 
     func translate(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -229,8 +230,15 @@ private struct LensView: View {
                     .strokeBorder(.orange.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
                 VStack(spacing: 5) {
                     Image(systemName: "text.viewfinder")
-                    Text("Text beneath this lens will be read")
+                    Text(model.needsScreenAccess
+                         ? "Enable screen capture once to read other apps"
+                         : "Text beneath this lens will be read")
                         .font(.caption)
+                    if model.needsScreenAccess {
+                        Button("Enable capture") { model.screenAccessHandler?() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                    }
                 }
                 .foregroundStyle(.orange)
                 .padding(8)
@@ -273,15 +281,9 @@ private struct LensView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                     Spacer()
-                    if model.needsScreenAccess {
-                        Button("Open Screen Recording Settings") {
-                            model.openScreenRecordingSettings()
-                        }
-                    } else {
-                        Button("Paste text") { model.pasteText() }
-                        Button("Copy") { model.copyResult() }
-                            .disabled(model.translatedText.isEmpty)
-                    }
+                    Button("Paste text") { model.pasteText() }
+                    Button("Copy") { model.copyResult() }
+                        .disabled(model.translatedText.isEmpty)
                     Button("Quit") { NSApp.terminate(nil) }
                 }
                 .controlSize(.small)
@@ -307,10 +309,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private var panel: NSPanel!
     private var pendingScan: Task<Void, Never>?
     private var autoScanEnabledAt = Date.distantFuture
+    private var requestedScreenAccess = false
+    private var autoCapturePaused = false
     private var hotKeyHandler: EventHandlerRef?
     private var hotKeys: [EventHotKeyRef] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if CommandLine.arguments.contains("--diagnose-screen-access") {
+            writeCaptureDiagnostic()
+            NSApp.terminate(nil)
+            return
+        }
         NSApp.setActivationPolicy(.regular)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         let menuIcon = NSImage(systemSymbolName: "character.viewfinder", accessibilityDescription: "Floating Translator")
@@ -340,6 +349,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window.delegate = self
         panel = window
         model.captureHandler = { [weak self] in self?.capture() }
+        model.screenAccessHandler = { [weak self] in self?.enableScreenAccess() }
+        model.needsScreenAccess = !CGPreflightScreenCaptureAccess()
+        if model.needsScreenAccess {
+            model.status = "Auto is ready. Click Enable capture to authorize this app once."
+        }
         installHotKeys()
         showPanel()
     }
@@ -347,6 +361,48 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys.forEach { UnregisterEventHotKey($0) }
         if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if !autoCapturePaused, model.needsScreenAccess, CGPreflightScreenCaptureAccess() {
+            model.needsScreenAccess = false
+            model.status = "Access enabled. Move the lens over text or click Capture."
+        }
+    }
+
+    private func enableScreenAccess() {
+        if CGPreflightScreenCaptureAccess() {
+            autoCapturePaused = false
+            model.needsScreenAccess = false
+            capture()
+            return
+        }
+        // A consent request must come from this explicit button, never a drag.
+        if !requestedScreenAccess {
+            requestedScreenAccess = true
+            if CGRequestScreenCaptureAccess() {
+                model.needsScreenAccess = false
+                capture()
+                return
+            }
+        }
+        model.openScreenRecordingSettings()
+        model.status = "Enable Floating Translator in Screen Recording settings, then quit and reopen."
+    }
+
+    private func writeCaptureDiagnostic() {
+        // Read-only permission check; this mode never creates a lens or captures.
+        let state: [String: Any] = [
+            "appPath": Bundle.main.bundlePath,
+            "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            "screenAccessGranted": CGPreflightScreenCaptureAccess()
+        ]
+        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let destination = directory.appendingPathComponent("Floating Translator")
+        try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted]) {
+            try? data.write(to: destination.appendingPathComponent("capture-status.json"), options: .atomic)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -443,8 +499,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
 
     private func capture(automatic: Bool = false) {
         pendingScan?.cancel()
-        guard !automatic || !model.needsScreenAccess else { return }
+        guard !automatic || !autoCapturePaused else { return }
         guard !model.isWorking, let lens = model.lensView, let window = lens.window else { return }
+        // This passive check cannot show a system permission dialog. The stable
+        // signing certificate makes the result consistent across local updates.
+        guard CGPreflightScreenCaptureAccess() else {
+            model.needsScreenAccess = true
+            model.status = "Auto is paused. Click Enable capture to allow the lens to read text."
+            return
+        }
         model.needsScreenAccess = false
         let localRect = lens.convert(lens.bounds, to: nil)
         let screenRect = window.convertToScreen(localRect)
@@ -462,17 +525,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             do {
                 let image = try await Self.captureDisplay(displayID: displayNumber.uint32Value,
                                                           screen: screen, rect: screenRect)
+                autoCapturePaused = false
                 let text = try await Self.recognize(image, sourceCode: model.sourceCode)
                 panel.makeKeyAndOrderFront(nil)
                 model.translate(text)
             } catch {
                 panel.makeKeyAndOrderFront(nil)
                 model.isWorking = false
-                if CGPreflightScreenCaptureAccess() {
-                    model.status = "Capture failed: \(error.localizedDescription)"
-                } else {
+                let captureError = error as NSError
+                if captureError.domain == SCStreamErrorDomain,
+                   captureError.code == SCStreamError.Code.userDeclined.rawValue {
+                    autoCapturePaused = true
                     model.needsScreenAccess = true
-                    model.status = "Screen Recording access is needed. Enable it in System Settings, then try again."
+                    model.status = "Screen access was declined. Click Enable capture to open Settings."
+                } else {
+                    model.status = "Capture failed: \(error.localizedDescription)"
                 }
             }
         }
