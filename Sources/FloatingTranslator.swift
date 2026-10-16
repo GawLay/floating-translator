@@ -63,6 +63,9 @@ final class TranslatorModel: ObservableObject {
     @Published var needsScreenAccess = false
     @Published var configuration: TranslationSession.Configuration?
     private var translationRequestID = 0
+    // Keep the revision even when active work is cancelled. SwiftUI can coalesce
+    // nil -> configuration changes; reusing revision zero can skip the next task.
+    private var lastConfiguration: TranslationSession.Configuration?
 
     var newAreaHandler: (() -> Void)?
     var showAreaHandler: (() -> Void)?
@@ -90,7 +93,7 @@ final class TranslatorModel: ObservableObject {
         let requestID = translationRequestID
         let source = sourceLanguages.first { $0.code == sourceCode }?.language
         let target = targetLanguages.first { $0.code == targetCode }?.language
-        let previousConfiguration = configuration
+        let previousConfiguration = lastConfiguration
         configuration = nil
         if source == target, source != nil {
             status = "Choose two different languages."
@@ -109,14 +112,17 @@ final class TranslatorModel: ObservableObject {
                 }
             }
             guard requestID == translationRequestID else { return }
-            if var previousConfiguration,
-               previousConfiguration.source == source,
-               previousConfiguration.target == target {
+            var nextConfiguration: TranslationSession.Configuration
+            if var previousConfiguration {
+                previousConfiguration.source = source
+                previousConfiguration.target = target
                 previousConfiguration.invalidate()
-                configuration = previousConfiguration
+                nextConfiguration = previousConfiguration
             } else {
-                configuration = TranslationSession.Configuration(source: source, target: target)
+                nextConfiguration = TranslationSession.Configuration(source: source, target: target)
             }
+            lastConfiguration = nextConfiguration
+            configuration = nextConfiguration
         }
     }
 
@@ -138,17 +144,32 @@ final class TranslatorModel: ObservableObject {
     func runTranslation(_ session: TranslationSession) async {
         let text = sourceText
         let requestID = translationRequestID
-        guard !text.isEmpty, !Task.isCancelled else { return }
+        defer {
+            // A cancelled task must release Refresh, but never clear a newer job.
+            if requestID == translationRequestID { isWorking = false }
+        }
+        guard !text.isEmpty else { return }
+        guard !Task.isCancelled else {
+            status = "Translation interrupted. Refresh to try again."
+            return
+        }
         do {
             let response = try await session.translate(text)
-            guard requestID == translationRequestID, !Task.isCancelled else { return }
+            guard requestID == translationRequestID else { return }
+            guard !Task.isCancelled else {
+                status = "Translation interrupted. Refresh to try again."
+                return
+            }
             translatedText = response.targetText
             status = "Ready"
         } catch {
-            guard requestID == translationRequestID, !Task.isCancelled else { return }
-            status = "Translation unavailable: \(error.localizedDescription)"
+            guard requestID == translationRequestID else { return }
+            if Task.isCancelled || error is CancellationError {
+                status = "Translation interrupted. Refresh to try again."
+            } else {
+                status = "Translation unavailable: \(error.localizedDescription)"
+            }
         }
-        isWorking = false
     }
 
     func pasteText() {
