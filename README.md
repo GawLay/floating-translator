@@ -6,7 +6,7 @@
 
 <p align="center">
   A tiny floating Mac tool for text that is hard to select or translate.<br>
-  Put the lens over the words, capture them, and understand them without leaving your current app.
+  Select text or choose a screen area, and read the translation without leaving your current app.
 </p>
 
 <p align="center">
@@ -25,9 +25,11 @@ Requires **macOS 15 or later**. No account or API key is needed.
 
 1. On this GitHub repository, click **Code → Download ZIP**, then extract the downloaded ZIP. You can also clone the repository with Git.
 2. Follow [Build from source](#build-from-source) below. This creates **Floating Translator.app** inside the extracted repository's `build` folder.
-3. Drag that app into **Applications**, then open it from there.
-4. Click **Enable capture**. In **System Settings → Privacy & Security → Screen Recording**, enable **Floating Translator**. On some macOS versions, this setting is called **Screen & System Audio Recording**.
-5. Quit and reopen the app if macOS asks, then move the lens over text. **Auto** scans after you move or resize it; **Refresh** scans again without moving it.
+3. Drag that app into **Applications**, then open it from there. Choose **New area** and draw a rectangle over the text you want to read.
+4. If screen access is missing, click **Enable capture** in the results card. In **System Settings → Privacy & Security → Screen Recording**, enable **Floating Translator**. On some macOS versions, this setting is called **Screen & System Audio Recording**.
+5. Quit and reopen the app if macOS asks, click **New area**, and drag a rectangle over the text. **Refresh** reads it again; turn on **Live scan** only when you want repeated scans.
+
+**Screen access is only needed for area capture.** Selected-text Services and **Paste text** work without it.
 
 Click the translation lens icon in the menu bar or press **⌥⌘T** to show or hide the window. Apple may ask to download translation languages on first use. **Paste text** works without screen access.
 
@@ -40,10 +42,10 @@ To open the app at login, add it in **System Settings → General → Login Item
 ## Preview
 
 <p align="center">
-  <img src="Assets/preview.png" alt="Floating Translator's dark floating lens reading Vietnamese text and displaying its English translation" width="520">
+  <img src="Assets/preview-0.4.png" alt="An independent scan frame beside a resizable dark results card translating Vietnamese into English" width="960">
 </p>
 
-Place the lens over text in another app and read the translation below. Refresh to scan the same area again.
+Native UI preview with synthetic sample text. Choose an area in another app and read its translation in a separate card. Refresh to scan the same area again.
 
 ## Why I made it
 
@@ -51,38 +53,58 @@ I built this for my own everyday use. Sometimes I come across text inside an app
 
 ## Features
 
-- A movable, resizable lens that stays above other apps.
-- A dark monochrome interface with black panels, white text, and a matching dark app icon.
-- Vietnamese → English by default, with Thai, Malay, and more language choices.
-- Auto Scan by default, with a Manual Capture option, plus menu bar and keyboard shortcuts.
-- A **Refresh** button to read and translate the lens again without moving it.
-- Complete original text and translation in scrollable panes, with text selection and a Copy button.
-- Paste text as a fallback when OCR cannot read the screen.
-- On-device translation through macOS, with no account or API key.
+- An independent scan frame with a solid drag grip, eight resize handles, and a clear center that lets you click the source app.
+- A resizable dark results card with a warm amber accent, a draggable Original/Translation divider, collapsible original text, and adjustable reading size.
+- **New area**: draw a capture rectangle instead of positioning a large app window.
+- **Translate with Floating Translator** in macOS Services for selected text, plus an explicit copied-text shortcut.
+- Vietnamese → English by default, with Thai, Malay, and other available languages, plus a swap button.
+- Paragraph formatting that joins wrapped OCR rows while keeping paragraph gaps, lists, headings, and short labels distinct. OCR grouping is heuristic; use **Edit original** to correct mistakes.
+- **Refresh**, **Copy translation**, and a pin to keep results above other apps.
+- Optional **Live scan**, off at launch. It pauses while you interact with the results card and skips retranslating unchanged text.
+- On-device translation with no account or API key.
 
 ## How it works
 
-1. Open Floating Translator. Its small window stays above other apps.
-2. Place the outlined lens over the text you want to understand. Drag a window edge or corner to resize the capture area.
-3. In **Auto** mode, move or resize the lens to scan. In **Manual** mode, click **Capture** (or press Return). Click **Refresh** whenever you want to read the area again—for example, after new text appears beneath a stationary lens. Both buttons run a fresh capture, text recognition, and translation. The lens stays visible while the app reads the text beneath it, then shows both the original and translation. ScreenCaptureKit excludes the translator window from the captured image.
-4. Scroll either result pane to read a longer capture. Use **Copy** to copy the result. If OCR misses something, copy the text yourself and use **Paste text**.
+### Capture an area
 
-**Auto** is selected each time the app starts. Choose **Manual** in the Scan Mode control when you want to capture only after clicking the button. Opening the app alone does not capture the screen; Auto scans after you move or resize the lens.
+1. Click **New area** or press **⌥⌘N**. Drag a rectangle over text; press **Esc** to cancel.
+2. The app reads that area once if screen access is already granted. Otherwise, use **Enable capture** in the results card.
+3. Move the area using **Drag to move area**. Resize it from any edge or handle. The clear center lets you interact with the source app.
+4. Read the independent results card. Drag its title bar to move it and its bottom-right grip to resize it. Drag the divider to change the space given to Original and Translation.
+5. Click **Refresh** after changing the area. Optionally enable **Live scan** to read it every two seconds. Turn it off to freeze the result. Hiding the app or closing the scan frame stops Live scan.
+
+The scan frame and results card stay visible during capture; ScreenCaptureKit excludes both from the captured image. The app preserves the previous translation while a new one is prepared.
+
+### Translate selected or copied text
+
+Select text in another app and choose **Services → Translate with Floating Translator**. The result opens directly in the card, with no scan frame or Screen Recording permission needed. Availability depends on the source app supporting macOS Services. You can enable the service or assign a shortcut in **System Settings → Keyboard → Keyboard Shortcuts → Services**. See [Apple's Services guide](https://support.apple.com/guide/mac-help/mchlp1012/mac).
+
+For apps that do not expose Services, copy text and press **⌃⌥⌘T**, or click **Paste text**. The app reads the clipboard only when you invoke that action.
+
+### Make reading comfortable
+
+- Collapse **Original** to give the translation more room, or use the pencil to correct OCR and choose **Translate edit**.
+- Use **Aa** to change text size. Text size, pane proportions, pin state, and window position are remembered.
+- Use the pin to keep the card above other apps. The title-bar menu includes **Show last scan area** and **Quit Floating Translator**.
+- Captured text and translations remain in memory; the app does not save a conversation history. Saved scan geometry contains only rectangle coordinates.
 
 ## Shortcuts
 
-Click the **translation lens icon** in the top-right menu bar to show or hide the floating window. Hover over it to see **Floating Translator** and its keyboard shortcut. The compact icon fits beside your other menu bar apps and remembers its position between launches. To rearrange it, hold **⌘ Command** and drag it along the menu bar.
+Click the menu bar lens icon or the Dock icon to open the results card.
 
 | Shortcut | Action |
 | --- | --- |
-| Menu bar **translation lens icon** | Show or hide the floating window. |
-| ⌥⌘T | Show or hide the window from another app. |
-| ⌥⌘R | Capture the lens. If the window is hidden, show it first. |
-| **Refresh** button | Read and translate the current lens area again. |
-| ⌥⌘A | Switch between Manual and Auto Scan. |
-| Return | Capture while the translator window is focused. |
+| ⌥⌘T | Show or hide the results card and active scan frame. Hiding stops Live scan. |
+| ⌥⌘N | Draw a new capture area. |
+| ⌥⌘R | Show the card and refresh the current area or text. |
+| ⌥⌘A | Switch Live scan on or off for the current area. |
+| ⌃⌥⌘T | Translate text you explicitly copied. |
+| Return | Refresh while the results card is focused, except while editing. |
+| ⌘Return | Translate your correction while editing the original. |
+| Esc | Cancel area selection. |
+| Services → Translate with Floating Translator | Translate a text selection from a supported app. |
 
-The three ⌥⌘ shortcuts are registered only while Floating Translator runs. They use macOS hotkeys and do not need Accessibility or Input Monitoring permission. If another app owns one of those shortcuts, the menu bar button and on-screen controls still work.
+Global shortcuts are registered only while the app runs and do not need Accessibility or Input Monitoring permission. If a shortcut is already in use, the buttons and menu bar remain available.
 
 ## Build from source
 
@@ -126,7 +148,7 @@ The local certificate is for development on your own Mac. Public binary releases
 | Screen Recording | macOS requires this to read pixels in another app. | Requested only when you click **Enable capture**. |
 | Translation language download | Apple may need to install the chosen language models. | The first time you use a language pair. |
 
-Opening the app and moving the lens do not request permission. The app first performs a passive access check. If permission is missing, Auto waits and the lens shows **Enable capture**. Click that button to authorize the app in System Settings. macOS may require you to quit and reopen after granting access. Once granted, moving or resizing the lens scans automatically. Paste text remains available even without screen access.
+Opening the app and moving the lens do not request permission. The app first performs a passive access check. If permission is missing, area capture waits and the results card shows **Enable capture**. Click that button to authorize the app in System Settings. macOS may require you to quit and reopen after granting access. Once granted, choosing a new area scans once. Moving or resizing an existing area scans automatically only when Live scan is enabled. Paste text remains available even without screen access.
 
 macOS may describe Screen Recording as **“screen and audio.”** Floating Translator sets audio capture off and does not request microphone, camera, Accessibility, or contacts access. It takes one display frame, crops it to the lens in memory, and discards the image after OCR. It does not save messages or screenshots. Translation runs through Apple's [on-device Translation framework](https://developer.apple.com/documentation/translation/translationsession).
 
@@ -136,7 +158,7 @@ macOS may describe Screen Recording as **“screen and audio.”** Floating Tran
 
 During early development, local builds used **ad hoc signing**. Each rebuild changed the app's code identity, so macOS could stop associating it with the permission you had already granted. The Settings toggle could still show the old build as enabled. Repeated capture attempts then brought the dialog back. Apple explains this behavior in its [code identity documentation](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
 
-The current build reuses a persistent certificate. The app also checks access before capturing, requests permission only through **Enable capture**, and pauses Auto when access is missing or declined. Switching from an old build to the new signing identity may require one fresh grant; ordinary updates using the same identity should retain it.
+The current build reuses a persistent certificate. The app also checks access before capturing, requests permission only through **Enable capture**, and pauses automatic capture when access is missing or declined. Switching from an old build to the new signing identity may require one fresh grant; ordinary updates using the same identity should retain it.
 
 ### Screen Recording is enabled, but capture is blocked
 
@@ -170,7 +192,7 @@ The result is written to `~/Library/Application Support/Floating Translator/capt
 - Keep the lens entirely on one display. If OCR misses small text, zoom the source app or use **Paste text**.
 - Available language pairs depend on macOS support and installed models. The app checks the chosen pair before translating and explains when the current macOS version does not support it. Malay translation in particular may require a newer macOS release.
 - The menu bar shortcut appears while the app runs. If macOS hides it because the menu bar is crowded, use the Dock icon to reopen the window.
-- The app does not continuously monitor the screen. Auto Scan is optional and only scans after you move or resize the window.
+- Live scan is optional, off at launch, and runs only for a visible scan area. It pauses while you interact with the results card; hiding the app stops it.
 
 ## Open source
 
