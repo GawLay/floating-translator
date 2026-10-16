@@ -11,10 +11,19 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleGetInfoString</key><string>A tiny floating tool to translate text in apps that do not offer translation.</string>
-  <key>CFBundleShortVersionString</key><string>0.3.6</string>
-  <key>CFBundleVersion</key><string>9</string>
+  <key>CFBundleShortVersionString</key><string>0.4.0</string>
+  <key>CFBundleVersion</key><string>10</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><false/>
-  <key>NSScreenCaptureUsageDescription</key><string>Read text under the lens when you click Capture or turn on Auto Scan. Audio is not captured.</string>
+  <key>NSScreenCaptureUsageDescription</key><string>Read text in the area you select after you enable capture. Live scan is optional. Audio is not captured.</string>
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key><dict><key>default</key><string>Translate with Floating Translator</string></dict>
+      <key>NSMessage</key><string>translateSelection</string>
+      <key>NSPortName</key><string>Floating Translator</string>
+      <key>NSSendTypes</key><array><string>public.utf8-plain-text</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>

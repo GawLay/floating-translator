@@ -5,7 +5,7 @@ import ScreenCaptureKit
 import Translation
 import Carbon
 
-private struct LanguageChoice: Identifiable, Hashable {
+struct LanguageChoice: Identifiable, Hashable {
     let code: String
     let name: String
     var id: String { code }
@@ -14,7 +14,7 @@ private struct LanguageChoice: Identifiable, Hashable {
     }
 }
 
-private let sourceLanguages: [LanguageChoice] = [
+let sourceLanguages: [LanguageChoice] = [
     .init(code: "vi", name: "Vietnamese"),
     .init(code: "auto", name: "Detect language"),
     .init(code: "en", name: "English"),
@@ -28,7 +28,9 @@ private let sourceLanguages: [LanguageChoice] = [
     .init(code: "ms", name: "Malay")
 ]
 
-private let targetLanguages = sourceLanguages.filter { $0.code != "auto" }
+let targetLanguages = sourceLanguages.filter { $0.code != "auto" }
+
+enum TranslationInput { case area, text }
 
 @MainActor
 final class TranslatorModel: ObservableObject {
@@ -36,14 +38,39 @@ final class TranslatorModel: ObservableObject {
     @Published var targetCode = "en"
     @Published var sourceText = ""
     @Published var translatedText = ""
-    @Published var status = "Move the lens over text to scan, or click Capture."
+    @Published var status = "Choose New area, paste text, or send a selection through Services."
     @Published var isWorking = false
-    @Published var autoScan = true
+    @Published var inputMode = TranslationInput.text
+    @Published var hasArea = false
+    @Published var isReading = false
+    @Published var isEditing = false
+    @Published var originalDraft = ""
+    @Published var showingTextSize = false
+    var startingFraction: Double?
+    @Published var liveScan = false { didSet { liveScanHandler?(liveScan) } }
+    @Published var isPinned = (UserDefaults.standard.object(forKey: "resultsPinned") as? Bool) ?? true {
+        didSet { UserDefaults.standard.set(isPinned, forKey: "resultsPinned"); pinHandler?() }
+    }
+    @Published var originalExpanded = (UserDefaults.standard.object(forKey: "originalExpanded") as? Bool) ?? true {
+        didSet { UserDefaults.standard.set(originalExpanded, forKey: "originalExpanded") }
+    }
+    @Published var originalFraction = min(0.65, max(0.12, (UserDefaults.standard.object(forKey: "originalFraction") as? Double) ?? 0.28)) {
+        didSet { UserDefaults.standard.set(originalFraction, forKey: "originalFraction") }
+    }
+    @Published var textSize = min(30, max(14, (UserDefaults.standard.object(forKey: "readingTextSize") as? Double) ?? 19)) {
+        didSet { UserDefaults.standard.set(textSize, forKey: "readingTextSize") }
+    }
     @Published var needsScreenAccess = false
     @Published var configuration: TranslationSession.Configuration?
     private var translationRequestID = 0
 
-    weak var lensView: NSView?
+    var newAreaHandler: (() -> Void)?
+    var showAreaHandler: (() -> Void)?
+    var closeHandler: (() -> Void)?
+    var pasteHandler: ((String) -> Void)?
+    var liveScanHandler: ((Bool) -> Void)?
+    var pinHandler: (() -> Void)?
+    var languageChangeHandler: (() -> Void)?
     var captureHandler: (() -> Void)?
     var screenAccessHandler: (() -> Void)?
 
@@ -98,17 +125,27 @@ final class TranslatorModel: ObservableObject {
         translate(sourceText)
     }
 
+    func swapLanguages() {
+        guard sourceCode != "auto" else { return }
+        (sourceCode, targetCode) = (targetCode, sourceCode)
+        // Continue from the translation, like flipping a phrasebook.
+        if !translatedText.isEmpty {
+            sourceText = translatedText
+            translatedText = ""
+        }
+    }
+
     func runTranslation(_ session: TranslationSession) async {
         let text = sourceText
         let requestID = translationRequestID
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty, !Task.isCancelled else { return }
         do {
             let response = try await session.translate(text)
-            guard requestID == translationRequestID else { return }
+            guard requestID == translationRequestID, !Task.isCancelled else { return }
             translatedText = response.targetText
             status = "Ready"
         } catch {
-            guard requestID == translationRequestID else { return }
+            guard requestID == translationRequestID, !Task.isCancelled else { return }
             status = "Translation unavailable: \(error.localizedDescription)"
         }
         isWorking = false
@@ -119,7 +156,8 @@ final class TranslatorModel: ObservableObject {
             status = "Clipboard has no text."
             return
         }
-        translate(value)
+        if let pasteHandler { pasteHandler(value) }
+        else { translate(value) }
     }
 
     func copyResult() {
@@ -129,566 +167,146 @@ final class TranslatorModel: ObservableObject {
         status = "Translation copied."
     }
 
+    func invalidateWork() {
+        translationRequestID += 1
+        configuration = nil
+        isWorking = false
+    }
+
+    func languagesChanged() {
+        languageChangeHandler?()
+        retranslate()
+    }
+
+    func startEditing() {
+        liveScan = false
+        originalExpanded = true
+        originalDraft = sourceText
+        isEditing = true
+    }
+
+    func applyEditedText() {
+        isEditing = false
+        if let pasteHandler { pasteHandler(originalDraft) }
+        else { translate(originalDraft) }
+    }
+
     func openScreenRecordingSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") else { return }
         NSWorkspace.shared.open(url)
     }
 }
 
-private final class LensAnchorView: NSView {
-    weak var model: TranslatorModel?
-    override var isFlipped: Bool { false }
-}
+let accent = Color(red: 0.95, green: 0.73, blue: 0.36)
+let panelColor = Color(white: 0.08)
+let fieldColor = Color(white: 0.15)
 
-private struct LensAnchor: NSViewRepresentable {
-    @ObservedObject var model: TranslatorModel
-
-    func makeNSView(context: Context) -> LensAnchorView {
-        let view = LensAnchorView()
-        view.model = model
-        model.lensView = view
-        return view
-    }
-
-    func updateNSView(_ view: LensAnchorView, context: Context) {
-        model.lensView = view
+extension View {
+    func panelBackground(cornerRadius: CGFloat = 18) -> some View {
+        background(panelColor, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
     }
 }
 
-private struct MonochromeButtonStyle: ButtonStyle {
+struct MonochromeButtonStyle: ButtonStyle {
     var prominent = false
-    @Environment(\.isEnabled) private var isEnabled
+    var large = false
+    @Environment(\.isEnabled) var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: large ? 12 : 10, style: .continuous)
         configuration.label
-            .font(.callout.weight(.medium))
+            .font(.system(size: large ? 14 : 13, weight: large ? .semibold : .medium))
             .foregroundStyle(prominent ? Color.black : Color.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(prominent ? Color.white : Color(white: 0.12), in: RoundedRectangle(cornerRadius: 7))
+            .frame(minHeight: large ? 20 : 18)
+            .padding(.horizontal, large ? 18 : 13)
+            .padding(.vertical, large ? 11 : 8)
+            .background(prominent ? accent : Color(white: 0.14), in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: 7)
-                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                shape.strokeBorder(Color.white.opacity(prominent ? 0 : 0.16), lineWidth: 1)
             }
+            .contentShape(shape)
             .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.4)
     }
 }
 
-private struct LensView: View {
+struct SectionLabel: View {
+    let title: String
+    var color: Color = .secondary
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 10.5, weight: .semibold))
+            .tracking(1.6)
+            .foregroundStyle(color)
+    }
+}
+
+struct LanguageField: View {
+    let caption: String
+    let choices: [LanguageChoice]
+    @Binding var selection: String
+
+    var body: some View {
+        Menu {
+            Picker(caption, selection: $selection) {
+                ForEach(choices) { Text($0.name).tag($0.code) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    SectionLabel(title: caption)
+                    Text(choices.first { $0.code == selection }?.name ?? selection)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .background(fieldColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(caption)
+    }
+}
+
+struct LanguageBar: View {
     @ObservedObject var model: TranslatorModel
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "text.viewfinder")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Translate anywhere")
-                        .font(.headline)
-                    Text("A tiny lens for text in other apps")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button {
-                    model.captureHandler?()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(model.isWorking)
-                .help("Read the lens again and translate fresh text (⌥⌘R)")
-                Button("Capture") { model.captureHandler?() }
-                    .keyboardShortcut(.return, modifiers: [])
-                    .disabled(model.isWorking)
-                    .buttonStyle(MonochromeButtonStyle(prominent: true))
-                    .help("Capture the lens (Return or ⌥⌘R)")
+        HStack(spacing: 6) {
+            LanguageField(caption: "From", choices: sourceLanguages, selection: $model.sourceCode)
+            Button {
+                model.swapLanguages()
+            } label: {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
             }
-            .padding(12)
-            .background(.black, in: RoundedRectangle(cornerRadius: 10))
-
-            HStack {
-                Picker("From", selection: $model.sourceCode) {
-                    ForEach(sourceLanguages) { Text($0.name).tag($0.code) }
-                }
-                .onChange(of: model.sourceCode) { _, _ in model.retranslate() }
-                Image(systemName: "arrow.right")
-                    .foregroundStyle(.secondary)
-                Picker("To", selection: $model.targetCode) {
-                    ForEach(targetLanguages) { Text($0.name).tag($0.code) }
-                }
-                .onChange(of: model.targetCode) { _, _ in model.retranslate() }
-            }
-            .labelsHidden()
-            .padding(7)
-            .background(.black, in: RoundedRectangle(cornerRadius: 10))
-
-            HStack {
-                Text("SCAN MODE")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 2) {
-                    ForEach([false, true], id: \.self) { enabled in
-                        Button {
-                            model.autoScan = enabled
-                            model.status = enabled
-                                ? "Auto scan is on. Move the lens over text."
-                                : "Manual mode. Click Capture when ready."
-                        } label: {
-                            Text(enabled ? "Auto" : "Manual")
-                                .font(.callout.weight(.medium))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .foregroundStyle(Color.white.opacity(model.autoScan == enabled ? 1 : 0.65))
-                                .background(Color.white.opacity(model.autoScan == enabled ? 0.18 : 0),
-                                            in: RoundedRectangle(cornerRadius: 6))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(model.autoScan == enabled ? .isSelected : [])
-                    }
-                }
-                .padding(2)
-                .frame(width: 180)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-                }
-                .accessibilityLabel("Scan mode")
-                Spacer()
-                Text("⌥⌘A to switch")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.black, in: RoundedRectangle(cornerRadius: 10))
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(.white, style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(.black, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
-                    }
-                VStack(spacing: 5) {
-                    Image(systemName: "text.viewfinder")
-                    Text(model.needsScreenAccess
-                         ? "Enable screen capture once to read other apps"
-                         : "Text beneath this lens will be read")
-                        .font(.caption)
-                    if model.needsScreenAccess {
-                        Button("Enable capture") { model.screenAccessHandler?() }
-                            .buttonStyle(MonochromeButtonStyle(prominent: true))
-                            .controlSize(.small)
-                    }
-                }
-                .foregroundStyle(.white)
-                .padding(8)
-                .background(.black, in: RoundedRectangle(cornerRadius: 8))
-            }
-            .frame(maxWidth: .infinity, minHeight: 128, maxHeight: .infinity)
-            .background(LensAnchor(model: model))
-            .overlay(alignment: .bottomTrailing) {
-                Label("Resize window for a larger lens", systemImage: "arrow.up.left.and.arrow.down.right")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(7)
-                    .background(.black, in: RoundedRectangle(cornerRadius: 7))
-                    .padding(8)
-                    .allowsHitTesting(false)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("ORIGINAL")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(.secondary)
-                ScrollView(.vertical) {
-                    Text(model.sourceText.isEmpty ? "Text read from the lens will appear here." : model.sourceText)
-                        .font(.subheadline)
-                        .foregroundStyle(model.sourceText.isEmpty ? .secondary : .primary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .frame(height: 64)
-                Divider()
-                HStack {
-                    Text("TRANSLATION")
-                        .font(.caption2.weight(.semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(.secondary)
-                    if model.isWorking {
-                        ProgressView().controlSize(.mini)
-                    }
-                }
-                ScrollView(.vertical) {
-                    Text(model.translatedText.isEmpty ? "Your translation will appear here." : model.translatedText)
-                        .font(.body)
-                        .foregroundStyle(model.translatedText.isEmpty ? .secondary : .primary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .frame(height: 96)
-                HStack {
-                    Text(model.status)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer()
-                    Button("Paste text") { model.pasteText() }
-                    Button("Copy") { model.copyResult() }
-                        .disabled(model.translatedText.isEmpty)
-                    Button("Quit") { NSApp.terminate(nil) }
-                }
-                .controlSize(.small)
-            }
-            .padding(14)
-            .background(.black, in: RoundedRectangle(cornerRadius: 10))
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .disabled(model.sourceCode == "auto")
+            .help("Swap languages")
+            LanguageField(caption: "To", choices: targetLanguages, selection: $model.targetCode)
         }
-        .padding(16)
-        .frame(minWidth: 500, maxWidth: .infinity,
-               minHeight: 700, maxHeight: .infinity)
-        .background(Color.clear)
-        .buttonStyle(MonochromeButtonStyle())
-        .foregroundStyle(.white)
-        .tint(.white)
-        .accentColor(.white)
-        .preferredColorScheme(.dark)
-        .translationTask(model.configuration) { session in
-            await model.runTranslation(session)
-        }
+        .padding(8)
+        .panelBackground()
+        .onChange(of: [model.sourceCode, model.targetCode]) { _, _ in model.languagesChanged() }
     }
-}
-
-@MainActor
-private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private let model = TranslatorModel()
-    private var statusItem: NSStatusItem!
-    private var panel: NSPanel!
-    private var pendingScan: Task<Void, Never>?
-    private var autoScanEnabledAt = Date.distantFuture
-    private var requestedScreenAccess = false
-    private var autoCapturePaused = false
-    private var hotKeyHandler: EventHandlerRef?
-    private var hotKeys: [EventHotKeyRef] = []
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        if CommandLine.arguments.contains("--diagnose-screen-access") {
-            writeCaptureDiagnostic()
-            NSApp.terminate(nil)
-            return
-        }
-        NSApp.setActivationPolicy(.regular)
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.autosaveName = "FloatingTranslator.MenuBar"
-        statusItem.isVisible = true
-        let menuIcon = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: "Floating Translator")
-        menuIcon?.size = NSSize(width: 18, height: 18)
-        menuIcon?.isTemplate = true
-        statusItem.button?.image = menuIcon
-        statusItem.button?.title = menuIcon == nil ? "A" : ""
-        statusItem.button?.imagePosition = menuIcon == nil ? .noImage : .imageOnly
-        statusItem.button?.setAccessibilityLabel("Floating Translator")
-        statusItem.button?.toolTip = "Floating Translator — show or hide the lens (⌥⌘T)"
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(togglePanel)
-
-        let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 500, height: 700),
-                             styleMask: [.titled, .closable, .resizable],
-                             backing: .buffered, defer: false)
-        window.title = "Floating Translator"
-        window.isFloatingPanel = true
-        window.hidesOnDeactivate = false
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.isMovableByWindowBackground = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.hasShadow = false
-        window.contentMinSize = NSSize(width: 500, height: 700)
-        window.maxSize = NSSize(width: 1000, height: 1000)
-        window.contentView = NSHostingView(rootView: LensView(model: model))
-        window.center()
-        window.delegate = self
-        panel = window
-        model.captureHandler = { [weak self] in self?.capture() }
-        model.screenAccessHandler = { [weak self] in self?.enableScreenAccess() }
-        model.needsScreenAccess = !CGPreflightScreenCaptureAccess()
-        if model.needsScreenAccess {
-            model.status = "Auto is ready. Click Enable capture to authorize this app once."
-        }
-        installHotKeys()
-        showPanel()
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        hotKeys.forEach { UnregisterEventHotKey($0) }
-        if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
-    }
-
-    func applicationDidBecomeActive(_ notification: Notification) {
-        if !autoCapturePaused, model.needsScreenAccess, CGPreflightScreenCaptureAccess() {
-            model.needsScreenAccess = false
-            model.status = "Access enabled. Move the lens over text or click Capture."
-        }
-    }
-
-    private func enableScreenAccess() {
-        if CGPreflightScreenCaptureAccess() {
-            autoCapturePaused = false
-            model.needsScreenAccess = false
-            capture()
-            return
-        }
-        // A consent request must come from this explicit button, never a drag.
-        if !requestedScreenAccess {
-            requestedScreenAccess = true
-            if CGRequestScreenCaptureAccess() {
-                model.needsScreenAccess = false
-                capture()
-                return
-            }
-        }
-        model.openScreenRecordingSettings()
-        model.status = "Enable Floating Translator in Screen Recording settings, then quit and reopen."
-    }
-
-    private func writeCaptureDiagnostic() {
-        // Read-only permission check; this mode never creates a lens or captures.
-        let state: [String: Any] = [
-            "appPath": Bundle.main.bundlePath,
-            "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
-            "screenAccessGranted": CGPreflightScreenCaptureAccess()
-        ]
-        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
-        let destination = directory.appendingPathComponent("Floating Translator")
-        try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-        if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted]) {
-            try? data.write(to: destination.appendingPathComponent("capture-status.json"), options: .atomic)
-        }
-    }
-
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showPanel()
-        return true
-    }
-
-    func windowDidMove(_ notification: Notification) {
-        // Ignore initial WindowServer positioning. Only a user's drag scans automatically.
-        guard model.autoScan, Date() >= autoScanEnabledAt,
-              NSEvent.pressedMouseButtons != 0 else { return }
-        pendingScan?.cancel()
-        guard panel.isVisible else { return }
-        pendingScan = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            guard !Task.isCancelled else { return }
-            self?.capture(automatic: true)
-        }
-    }
-
-    func windowDidEndLiveResize(_ notification: Notification) {
-        guard model.autoScan else { return }
-        pendingScan?.cancel()
-        pendingScan = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            guard !Task.isCancelled else { return }
-            self?.capture(automatic: true)
-        }
-    }
-
-    private func installHotKeys() {
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                      eventKind: UInt32(kEventHotKeyPressed))
-        let callback: EventHandlerUPP = { _, event, userData in
-            guard let event, let userData else { return OSStatus(eventNotHandledErr) }
-            var identifier = EventHotKeyID()
-            let result = GetEventParameter(event, EventParamName(kEventParamDirectObject),
-                                           EventParamType(typeEventHotKeyID), nil,
-                                           MemoryLayout<EventHotKeyID>.size, nil,
-                                           &identifier)
-            guard result == noErr else { return result }
-            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            let keyID = identifier.id
-            Task { @MainActor in delegate.handleHotKey(keyID) }
-            return noErr
-        }
-        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), callback, 1,
-                                                &eventType,
-                                                Unmanaged.passUnretained(self).toOpaque(),
-                                                &hotKeyHandler)
-        guard handlerStatus == noErr else { return }
-
-        let modifiers = UInt32(cmdKey | optionKey)
-        let shortcuts: [(UInt32, UInt32)] = [
-            (1, UInt32(kVK_ANSI_T)), // ⌥⌘T: show or hide
-            (2, UInt32(kVK_ANSI_R)), // ⌥⌘R: capture
-            (3, UInt32(kVK_ANSI_A))  // ⌥⌘A: Auto Scan on or off
-        ]
-        for (id, keyCode) in shortcuts {
-            var reference: EventHotKeyRef?
-            let identifier = EventHotKeyID(signature: 0x46544C4E, id: id)
-            let result = RegisterEventHotKey(keyCode, modifiers, identifier,
-                                             GetApplicationEventTarget(), 0, &reference)
-            if result == noErr, let reference { hotKeys.append(reference) }
-        }
-        if hotKeys.count != shortcuts.count {
-            model.status = "Some shortcuts are already used by another app. The menu bar button still works."
-        }
-    }
-
-    private func handleHotKey(_ id: UInt32) {
-        switch id {
-        case 1: togglePanel()
-        case 2:
-            if panel.isVisible { capture() }
-            else { showPanel() }
-        case 3:
-            model.autoScan.toggle()
-            model.status = model.autoScan
-                ? "Auto scan is on. Move the lens over text."
-                : "Manual mode. Click Capture when ready."
-            showPanel()
-        default: break
-        }
-    }
-
-    @objc private func togglePanel() {
-        if panel.isVisible { panel.orderOut(nil) }
-        else { showPanel() }
-    }
-
-    private func showPanel() {
-        autoScanEnabledAt = Date().addingTimeInterval(1.5)
-        panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func capture(automatic: Bool = false) {
-        pendingScan?.cancel()
-        guard !automatic || !autoCapturePaused else { return }
-        guard !model.isWorking, let lens = model.lensView, let window = lens.window else { return }
-        // This passive check cannot show a system permission dialog. The stable
-        // signing certificate makes the result consistent across local updates.
-        guard CGPreflightScreenCaptureAccess() else {
-            model.needsScreenAccess = true
-            model.status = "Auto is paused. Click Enable capture to allow the lens to read text."
-            return
-        }
-        model.needsScreenAccess = false
-        let localRect = lens.convert(lens.bounds, to: nil)
-        let screenRect = window.convertToScreen(localRect)
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(screenRect.midpoint) }),
-              let displayNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-            model.status = "Move the lens fully onto a display and try again."
-            return
-        }
-        model.isWorking = true
-        model.status = "Reading text…"
-        Task {
-            do {
-                let image = try await Self.captureDisplay(displayID: displayNumber.uint32Value,
-                                                          screen: screen, rect: screenRect)
-                autoCapturePaused = false
-                let text = try await Self.recognize(image, sourceCode: model.sourceCode)
-                model.translate(text)
-            } catch {
-                model.isWorking = false
-                let captureError = error as NSError
-                if captureError.domain == SCStreamErrorDomain,
-                   captureError.code == SCStreamError.Code.userDeclined.rawValue {
-                    autoCapturePaused = true
-                    model.needsScreenAccess = true
-                    model.status = "Screen access was declined. Click Enable capture to open Settings."
-                } else {
-                    model.status = "Capture failed: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    private static func captureDisplay(displayID: CGDirectDisplayID, screen: NSScreen,
-                                       rect: CGRect) async throws -> CGImage {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-            throw CaptureError.displayNotFound
-        }
-        // WindowServer composites the text underneath us without hiding the lens
-        // or changing focus in the source app.
-        let ownApps = content.applications.filter {
-            $0.processID == ProcessInfo.processInfo.processIdentifier
-        }
-        let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
-        let configuration = SCStreamConfiguration()
-        configuration.width = Int(CGFloat(display.width) * screen.backingScaleFactor)
-        configuration.height = Int(CGFloat(display.height) * screen.backingScaleFactor)
-        configuration.showsCursor = false
-        configuration.capturesAudio = false
-        let screenshot = try await SCScreenshotManager.captureImage(contentFilter: filter,
-                                                                   configuration: configuration)
-        let scaleX = CGFloat(screenshot.width) / screen.frame.width
-        let scaleY = CGFloat(screenshot.height) / screen.frame.height
-        let crop = CGRect(x: (rect.minX - screen.frame.minX) * scaleX,
-                          y: (screen.frame.maxY - rect.maxY) * scaleY,
-                          width: rect.width * scaleX, height: rect.height * scaleY).integral
-        guard let clipped = screenshot.cropping(to: crop.intersection(CGRect(x: 0, y: 0,
-            width: screenshot.width, height: screenshot.height))) else {
-            throw CaptureError.invalidRegion
-        }
-        return clipped
-    }
-
-    private static func recognize(_ image: CGImage, sourceCode: String) async throws -> String {
-        try await Task.detached(priority: .userInitiated) {
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
-            request.minimumTextHeight = 0.005
-            let codes: [String: String] = [
-                "vi": "vi-VT", "en": "en-US", "fr": "fr-FR", "de": "de-DE",
-                "es": "es-ES", "ja": "ja-JP", "ko": "ko-KR",
-                "zh-Hans": "zh-Hans", "th": "th-TH", "ms": "ms-MY"
-            ]
-            let preferred = codes[sourceCode] ?? "vi-VT"
-            let supported = try request.supportedRecognitionLanguages()
-            request.recognitionLanguages = [preferred, "en-US", "vi-VT"]
-                .filter { supported.contains($0) }
-                .uniqued()
-            try VNImageRequestHandler(cgImage: image).perform([request])
-            return (request.results ?? []).sorted {
-                $0.boundingBox.midY > $1.boundingBox.midY
-            }.compactMap { $0.topCandidates(1).first?.string }
-                .joined(separator: "\n")
-        }.value
-    }
-}
-
-private enum CaptureError: LocalizedError {
-    case displayNotFound, invalidRegion
-    var errorDescription: String? {
-        switch self {
-        case .displayNotFound: "Display not found"
-        case .invalidRegion: "Lens is outside the display"
-        }
-    }
-}
-
-private extension CGRect {
-    var midpoint: CGPoint { CGPoint(x: midX, y: midY) }
-}
-
-private extension Sequence where Element: Hashable {
-    func uniqued() -> [Element] {
-        var seen = Set<Element>()
-        return filter { seen.insert($0).inserted }
-    }
-}
-
-@main
-private struct FloatingTranslatorApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    var body: some Scene { Settings { EmptyView() } }
 }
