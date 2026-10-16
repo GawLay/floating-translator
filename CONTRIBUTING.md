@@ -24,3 +24,17 @@ swiftc -parse-as-library -module-cache-path .build/test-cache \
 ```
 
 Use synthetic text for UI and service checks. Do not capture private screen content as a test fixture.
+
+## Signing and releases
+
+The app uses Apple's AppKit, SwiftUI, Vision, ScreenCaptureKit, Translation, and Carbon frameworks.
+
+Local builds reuse a persistent signing certificate. The first build creates a dedicated private keychain in `~/Library/Application Support/Floating Translator/Signing` and a user-level trust entry scoped to that certificate's code-signing use. Later builds reuse it so macOS can recognize updates as the same app. Keep this directory private, retain it across builds, and back it up. The private key is never placed in this repository.
+
+If you have an Apple Development or Developer ID signing identity, set `CODESIGN_IDENTITY` instead:
+
+```sh
+CODESIGN_IDENTITY='your signing identity' ./build.sh
+```
+
+The local certificate is for development on your own Mac. Public binary releases should use Developer ID signing and notarization. Changing the signing certificate can require a fresh permission grant.
