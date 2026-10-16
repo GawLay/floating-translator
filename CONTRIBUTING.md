@@ -25,6 +25,19 @@ swiftc -parse-as-library -module-cache-path .build/test-cache \
 
 Use synthetic text for UI and service checks. Do not capture private screen content as a test fixture.
 
+## Translation refresh checks
+
+With Vietnamese and English models already installed, run the native session regression:
+
+```sh
+swiftc -parse-as-library -swift-version 5 -module-cache-path .build/refresh-test-cache \
+  Sources/FloatingTranslator.swift Sources/ResultsCard.swift Tests/TranslationRefreshTests.swift \
+  -o .build/translation-refresh-tests
+.build/translation-refresh-tests
+```
+
+This briefly opens a test window and checks repeated Refresh, replacement text, interrupted work, language changes, and reopening. It uses synthetic text, skips with exit code 77 if models are missing, and never requests screen access or downloads models.
+
 ## Signing and releases
 
 The app uses Apple's AppKit, SwiftUI, Vision, ScreenCaptureKit, Translation, and Carbon frameworks.

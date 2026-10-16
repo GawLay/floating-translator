@@ -11,8 +11,8 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleGetInfoString</key><string>A tiny floating tool to translate text in apps that do not offer translation.</string>
-  <key>CFBundleShortVersionString</key><string>0.4.0</string>
-  <key>CFBundleVersion</key><string>10</string>
+  <key>CFBundleShortVersionString</key><string>0.4.1</string>
+  <key>CFBundleVersion</key><string>11</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><false/>
   <key>NSScreenCaptureUsageDescription</key><string>Read text in the area you select after you enable capture. Live scan is optional. Audio is not captured.</string>
